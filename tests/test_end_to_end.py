@@ -313,6 +313,8 @@ def test_coming_soon_ranks_what_fits_your_taste():
         shown = [i["key"] for i in c.get("/api/upcoming?media=movie").json()["items"]]
         assert noir not in shown and 999 not in shown, "hidden straight away, without waiting for a sync"
         assert all(999 not in [i["key"] for i in g["items"]] for g in c.get("/api/gaps").json()["groups"])
+        groups = c.get("/api/gaps").json()["groups"]   # and its collection says where it went
+        assert any(g.get("requested") for g in groups), [(g["name"], g.get("requested")) for g in groups]
         extras.build_upcoming(WithDiscover())
         rebuilt = [i["key"] for i in db.get_meta("upcoming")["items"]]
         assert noir not in rebuilt and 999 not in rebuilt, "and they don't use up places in the next build"

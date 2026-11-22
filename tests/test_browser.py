@@ -660,3 +660,16 @@ def test_up_next_switch_on_a_phone(browser, site):
         assert not errors, errors
     finally:
         ctx.close()
+
+
+def test_a_collection_with_nothing_left_disappears_after_not_interested(page):
+    go(page, "gaps")
+    page.evaluate('''() => {
+        const box = document.getElementById('listBody');
+        box.innerHTML = `<div class="gap" id="g1"><div class="hscroll"><div class="card" data-key="1"></div></div></div>
+                         <div class="gap" id="g2"><div class="hscroll"><div class="card" data-key="2"></div><div class="card" data-key="3"></div></div></div>`;
+        document.querySelector('[data-key="1"]').remove(); pruneEmptyGroups();
+    }''')
+    assert page.locator("#g1").count() == 0 and page.locator("#g2").count() == 1   # the emptied collection is gone, the other stays
+    page.evaluate("() => { document.querySelectorAll('#g2 .card').forEach(c => c.remove()); pruneEmptyGroups(); }")
+    assert "Your collections are complete" in page.locator("#listBody").inner_text()

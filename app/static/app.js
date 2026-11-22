@@ -419,6 +419,7 @@ async function quickHide(key, el) {
   } catch (e) { toast(e.message); return; }
   if (idx >= 0) { items.splice(idx, 1); if (!r.source) total--; updateCount(); }
   document.querySelectorAll(`.card[data-key="${key}"]`).forEach(x => x.remove());
+  pruneEmptyGroups();
   toast(`Not interested in ${r.title}`, { label: "Undo", fn: async () => {
     await api("/api/feedback/" + key, { method: "DELETE" });
     if (idx >= 0) { items.splice(idx, 0, r); if (!r.source) total++; render(); } else refreshView();
@@ -630,7 +631,13 @@ function removeCurrent() {
   if (i >= 0) { items.splice(i, 1); if (!r.source) total--; updateCount(); }
   navList = navList.filter(k => k !== r.key);
   closeDrawer();
-  document.querySelectorAll(`.card[data-key="${r.key}"]`).forEach(x => { x.classList.add("leaving"); setTimeout(() => x.remove(), 350); });
+  document.querySelectorAll(`.card[data-key="${r.key}"]`).forEach(x => { x.classList.add("leaving"); setTimeout(() => { x.remove(); pruneEmptyGroups(); }, 350); });
+}
+// A collection or director on Up next › Collections with nothing left to show goes too (and the page says so if all are gone)
+function pruneEmptyGroups() {
+  document.querySelectorAll("#listBody .gap").forEach(g => { if (!g.querySelector(".card")) g.remove(); });
+  if (view === "gaps" && $("listBody").querySelector(".gap") === null && $("listBody").querySelector(".gap-head, .hscroll") === null && !$("listBody").querySelector(".empty"))
+    $("listBody").insertAdjacentHTML("beforeend", `<div class="empty">No gaps left. Your collections are complete.</div>`);
 }
 async function fb(action) {
   const r = current;
@@ -1031,7 +1038,7 @@ async function loadGaps() {
     d.groups.map(g => `<div class="gap">
       <div class="gap-head">${g.type === "director" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
         <div><h3>${g.type === "director" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
-        <div class="muted">${g.type === "director" ? "Director · " : ""}You have ${g.owned} of ${g.total}</div>
+        <div class="muted">${g.type === "director" ? "Director · " : ""}You have ${g.owned} of ${g.total}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
       <div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div></div>`).join(""), tools);
 }

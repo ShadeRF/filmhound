@@ -967,10 +967,22 @@ def _gaps(kind="all"):
     g = db.get_meta("gaps") or {"groups": []}
     groups = [x for x in g["groups"] if kind == "all" or x["type"] == kind]
     wanted = discover.already_wanted()   # checked when shown, so adding one in Radarr hides it straight away
+    out = []
     for x in groups:
         _decorate(x["items"])
-        x["items"] = [i for i in x["items"] if not i["owned"] and i["feedback"] != "dismissed" and i["key"] not in wanted]
-    return {"at": g.get("_at"), "groups": [x for x in groups if x["items"]]}
+        keep, got, requested, hidden = [], 0, 0, 0   # say where the titles that aren't shown went
+        for i in x["items"]:
+            if i["owned"]:
+                got += 1
+            elif i["feedback"] == "dismissed":
+                hidden += 1
+            elif i["key"] in wanted:
+                requested += 1
+            else:
+                keep.append(i)
+        if keep:
+            out.append({**x, "items": keep, "owned": x["owned"] + got, "requested": requested, "hidden": hidden})
+    return {"at": g.get("_at"), "groups": out}
 
 
 @app.get("/api/upcoming")

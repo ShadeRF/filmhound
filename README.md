@@ -72,7 +72,7 @@ The container runs as `99:100` by default (`PUID`, `PGID`, `UMASK` change that).
 |---|---|
 | `:latest` | Stable releases. Recommended. |
 | `:nightly` | Built each night from the newest code, when there's anything new. New features first, and occasionally a bug. |
-| `:0.11.0` or `:0.11` | One exact release (or the newest fix in that line). Use it to stay put or to roll back if a release causes trouble. |
+| `:0.11.1` or `:0.11` | One exact release (or the newest fix in that line). Use it to stay put or to roll back if a release causes trouble. |
 | `:edge` | Test builds, published whenever a change is being tried out, sometimes several times a day. Expect rough edges; only use it if you're helping test. |
 
 Your settings and data carry over when you switch, so you can move between them any time.
@@ -87,7 +87,7 @@ Your settings and data carry over when you switch, so you can move between them 
 
 - **For You:** *Top picks*, *Because you watched…*, *Because you have…*, themed rows (*More neo-noir*, a director you return to), *Streaming on your services*, *Already in your library, not watched yet*, *Finish what you started* (missing films from collections you own, and from directors and actors you collect), *Coming soon for you* (unreleased movies and shows that fit your taste), *Hidden gems*, *Recent releases* and *Classics*. Movies and TV each get their own.
 - **All Picks:** every scored pick with filters for genres (in or out), years, rating, runtime, language, network and your streaming services. It keeps scoring deeper as you scroll.
-- **Up next:** *Collections* and *Coming soon*. *Collections* is *Finish what you started*: films missing from collections you own, from directors you collect, and from actors you collect (top-billed in five or more of your films; you see their other leading roles). Movies only. Groups missing five or fewer sit side by side under *Almost complete*, the rest under *More to find*, and each says how many you've already requested or marked not interested. *Coming soon* lists unreleased movies and shows that fit your taste.
+- **Up next:** *Collections* and *Coming soon*. *Collections* is *Finish what you started*: films missing from collections you own, from directors you collect, and from actors you collect (top-billed in five or more of your films; you see their other leading roles). Movies only. Nearly finished ones come first, and each says how many you've already requested or marked not interested. *Coming soon* lists unreleased movies and shows that fit your taste.
 - **Your Library:** what you own but haven't watched, ranked by your taste. **Make Plex collection** sends the top ones to Plex; pick how many with *Collection size*.
 - **Watchlist:** titles you've saved, with what you already own filtered out on the home page.
 - **Rate:** rate what you've watched, one title at a time (tap the stars, or press 1–5; hold Shift for a half star, so Shift+4 is 3½). Ratings on titles in Plex are saved to Plex. *Seen any of your picks?* goes through your picks instead; press K for **Seen it** without a rating.

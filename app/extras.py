@@ -149,7 +149,7 @@ def build_gaps(tmdb=None, step=lambda *a: None):
             groups.append({"type": "actor", "id": pid, "name": names[pid][0], "profile": names[pid][1] or p.get("profile_path"),
                            "owned": actors[pid], "total": actors[pid] + len(missing), "items": missing[:12]})
     groups.sort(key=lambda g: (-g["owned"] / g["total"], -g["owned"]))
-    db.set_meta("gaps", {"_at": time.time(), "groups": groups})
+    db.set_meta("gaps", {"_at": time.time(), "groups": groups, "actors": True})   # actors: built by a version that looks for them
     return len(groups)
 
 

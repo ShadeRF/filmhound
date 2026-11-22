@@ -597,3 +597,9 @@ details.fold > summary:focus-visible, details.adv > summary:focus-visible { outl
 @media (min-width: 1240px) and (max-width: 1400px) { .gsearch { width: 180px; } }
 /* phones: a list page's own buttons (All / Collections / Directors) go under its title instead of off the edge */
 @media (max-width: 560px) { .list-head { flex-wrap: wrap; align-items: flex-start; } }
+/* Groups with only a few titles sit side by side instead of taking a whole row each */
+.gaps { display: flex; flex-wrap: wrap; gap: 0 44px; align-items: flex-start; }
+.gaps > .gap { flex: 1 1 100%; min-width: 0; }
+.gaps > .gap.few { flex: 0 1 auto; max-width: 100%; }
+.gap.few .hscroll { overflow: visible; }
+.gap.few .scroll-btn { display: none; }

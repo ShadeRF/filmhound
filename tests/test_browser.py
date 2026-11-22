@@ -683,3 +683,19 @@ def test_row_arrows_scroll_on_every_page(page):
     page.wait_for_function("document.querySelector('#homeRows .hscroll').scrollLeft > 0")
     go(page, "gaps")   # Finish what you started builds its rows with the same arrows
     assert page.evaluate("loadGaps.toString().includes('scroll-btn r')")
+
+
+def test_actors_explain_they_need_a_sync(page):
+    from app import db
+    keep = db.get_meta("gaps")
+    db.set_meta("gaps", {"_at": 1, "groups": []})   # built before actors existed
+    try:
+        go(page, "gaps")
+        page.click("[data-gk=actor]")
+        settle(page)
+        assert "Actors you collect show up after your next full sync." in page.locator("#listBody").inner_text()
+        db.set_meta("gaps", {"_at": 1, "groups": [], "actors": True})
+        page.click("[data-gk=director]"); settle(page); page.click("[data-gk=actor]"); settle(page)
+        assert "No missing films from actors you collect." in page.locator("#listBody").inner_text()
+    finally:
+        db.set_meta("gaps", keep)

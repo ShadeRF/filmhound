@@ -982,7 +982,7 @@ def _gaps(kind="all"):
                 keep.append(i)
         if keep:
             out.append({**x, "items": keep, "owned": x["owned"] + got, "requested": requested, "hidden": hidden})
-    return {"at": g.get("_at"), "groups": out}
+    return {"at": g.get("_at"), "groups": out, "actors": bool(g.get("actors"))}
 
 
 @app.get("/api/upcoming")

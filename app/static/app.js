@@ -1032,14 +1032,18 @@ async function loadGaps() {
   const my = ++listSeq; let d; try { d = await api("/api/gaps?kind=" + gapKind); } catch (e) { if (my === listSeq) listShell("Finish what you started", esc(e.message), ""); return; }
   if (my !== listSeq) return;   // you've moved on to another page since
   const tools = `<span class="seg">${[["all", "All"], ["collection", "Collections"], ["director", "Directors"], ["actor", "Actors"]].map(([k, l]) => `<button data-gk="${k}" class="${gapKind === k ? "on" : ""}">${l}</button>`).join("")}</span>`;
-  if (!d.groups.length) { listShell("Finish what you started", "", `<div class="empty">${d.at ? "No gaps found. Your collections are complete." : "This fills in after your next full sync."}</div>`, tools); return; }
+  const none = !d.at ? "This fills in after your next full sync."
+    : gapKind === "actor" && !d.actors ? "Actors you collect show up after your next full sync."
+    : { collection: "No missing films from collections you own.", director: "No missing films from directors you collect.",
+        actor: "No missing films from actors you collect." }[gapKind] || "No gaps found. Your collections are complete.";
+  if (!d.groups.length) { listShell("Finish what you started", "", `<div class="empty">${none}</div>`, tools); return; }
   listShell("Finish what you started", "Films missing from collections you own, and from directors and actors you collect (their leading roles). Movies only.",
-    d.groups.map(g => `<div class="gap">
+    `<div class="gaps">${d.groups.map(g => `<div class="gap${g.items.length <= 3 ? " few" : ""}">
       <div class="gap-head">${g.type !== "collection" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
         <div><h3>${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
         <div class="muted">${g.type === "director" ? "Director · " : g.type === "actor" ? "Actor · " : ""}You have ${g.owned} of ${g.total}${g.type === "actor" ? " leading roles" : ""}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
-      <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`).join(""), tools);
+      <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`).join("")}</div>`, tools);
 }
 async function loadUpcoming() {
   listShell("Coming soon", "", `<div class="grid">${skeleton(10)}</div>`);

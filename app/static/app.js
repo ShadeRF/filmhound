@@ -636,6 +636,8 @@ function removeCurrent() {
 // A collection or director on Up next › Collections with nothing left to show goes too (and the page says so if all are gone)
 function pruneEmptyGroups() {
   document.querySelectorAll("#listBody .gap").forEach(g => { if (!g.querySelector(".card")) g.remove(); });
+  document.querySelectorAll("#listBody .gaps").forEach(b => { if (!b.querySelector(".gap")) { if (b.previousElementSibling?.classList.contains("gap-sec")) b.previousElementSibling.remove(); b.remove(); } });
+  if (document.querySelectorAll("#listBody .gaps").length < 2) document.querySelectorAll("#listBody .gap-sec").forEach(h => h.remove());
   if (view === "gaps" && $("listBody").querySelector(".gap") === null && $("listBody").querySelector(".gap-head, .hscroll") === null && !$("listBody").querySelector(".empty"))
     $("listBody").insertAdjacentHTML("beforeend", `<div class="empty">No gaps left. Your collections are complete.</div>`);
 }
@@ -1038,12 +1040,20 @@ async function loadGaps() {
         actor: "No missing films from actors you collect." }[gapKind] || "No gaps found. Your collections are complete.";
   if (!d.groups.length) { listShell("Finish what you started", "", `<div class="empty">${none}</div>`, tools); return; }
   listShell("Finish what you started", "Films missing from collections you own, and from directors and actors you collect (their leading roles). Movies only.",
-    `<div class="gaps">${d.groups.map(g => `<div class="gap${g.items.length <= 3 ? " few" : ""}">
+    gapSections(d.groups, g => g.items.length, (g, few) => `<div class="gap${few ? " few" : ""}" style="--n:${g.items.length}">
       <div class="gap-head">${g.type !== "collection" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
         <div><h3>${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
         <div class="muted">${g.type === "director" ? "Director · " : g.type === "actor" ? "Actor · " : ""}You have ${g.owned} of ${g.total}${g.type === "actor" ? " leading roles" : ""}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
-      <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`).join("")}</div>`, tools);
+      <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`), tools);
+}
+// Groups missing 5 or fewer sit side by side under "Almost complete", each only as wide as its posters;
+// bigger ones get full-width rows under "More to find". Headings only when both are there.
+const GAP_FEW = 5;
+function gapSections(groups, count, one) {
+  const few = groups.filter(g => count(g) <= GAP_FEW), many = groups.filter(g => count(g) > GAP_FEW), both = few.length && many.length;
+  return (few.length ? `${both ? `<h3 class="gap-sec">Almost complete</h3>` : ""}<div class="gaps">${few.map(g => one(g, true)).join("")}</div>` : "")
+    + (many.length ? `${both ? `<h3 class="gap-sec">More to find</h3>` : ""}<div class="gaps">${many.map(g => one(g, false)).join("")}</div>` : "");
 }
 async function loadUpcoming() {
   listShell("Coming soon", "", `<div class="grid">${skeleton(10)}</div>`);

@@ -1032,13 +1032,13 @@ async function loadGaps() {
   listShell("Finish what you started", "", `<div class="grid">${skeleton(10)}</div>`);
   const my = ++listSeq; let d; try { d = await api("/api/gaps?kind=" + gapKind); } catch (e) { if (my === listSeq) listShell("Finish what you started", esc(e.message), ""); return; }
   if (my !== listSeq) return;   // you've moved on to another page since
-  const tools = `<span class="seg">${[["all", "All"], ["collection", "Collections"], ["director", "Directors"]].map(([k, l]) => `<button data-gk="${k}" class="${gapKind === k ? "on" : ""}">${l}</button>`).join("")}</span>`;
+  const tools = `<span class="seg">${[["all", "All"], ["collection", "Collections"], ["director", "Directors"], ["actor", "Actors"]].map(([k, l]) => `<button data-gk="${k}" class="${gapKind === k ? "on" : ""}">${l}</button>`).join("")}</span>`;
   if (!d.groups.length) { listShell("Finish what you started", "", `<div class="empty">${d.at ? "No gaps found. Your collections are complete." : "This fills in after your next full sync."}</div>`, tools); return; }
-  listShell("Finish what you started", "Films missing from collections and directors you already own. Movies only.",
+  listShell("Finish what you started", "Films missing from collections you own, and from directors and actors you collect (their leading roles). Movies only.",
     d.groups.map(g => `<div class="gap">
-      <div class="gap-head">${g.type === "director" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
-        <div><h3>${g.type === "director" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
-        <div class="muted">${g.type === "director" ? "Director · " : ""}You have ${g.owned} of ${g.total}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
+      <div class="gap-head">${g.type !== "collection" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
+        <div><h3>${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
+        <div class="muted">${g.type === "director" ? "Director · " : g.type === "actor" ? "Actor · " : ""}You have ${g.owned} of ${g.total}${g.type === "actor" ? " leading roles" : ""}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
       <div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div></div>`).join(""), tools);
 }

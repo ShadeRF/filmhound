@@ -5,6 +5,7 @@ Universe: a noir cluster (director 1, keyword 'neo-noir') and a rom-com cluster
 plus one rom-com rated 2/10. Noir candidates should win; the blocklisted and
 already-owned titles must never appear.
 """
+from collections import Counter
 import os
 import random
 import sys
@@ -655,3 +656,29 @@ def test_own_only_library_counts_as_owned_but_does_not_shape_picks(monkeypatch):
         db.set_meta("plex_sections", sections)
         monkeypatch.setattr(config, "NOSEED_LIBRARIES", [])
         s.compute("movie")
+
+
+def test_actors_whose_leading_roles_you_collect():
+    from app import extras
+    db.init()
+    owned = {r["tmdb_id"] for r in db.library() if r["tmdb_id"] > 0}
+    leads = Counter(x["id"] for d in (v[0] for v in db.tmdb_get_many(list(owned)).values()) for x in (d.get("cast") or [])[:3])
+    pid = next(p for p, n in leads.most_common() if n >= 5)   # someone who leads 5+ films you own
+
+    class PeopleTMDB(FakeTMDB):
+        def _get(self, path, **params):
+            if path == f"/person/{pid}":
+                film = lambda i, order, votes: {"id": i, "title": f"Film {i}", "release_date": "2001-01-01", "media_type": "movie",
+                                                "order": order, "vote_count": votes, "poster_path": "/p.jpg"}
+                return {"id": pid, "name": "Lead Actor", "profile_path": "/face.jpg", "combined_credits": {"crew": [], "cast": [
+                    film(5001, 0, 4000), film(5002, 1, 9000),   # leading roles you don't own
+                    film(5003, 8, 9000),                       # a small part: left out
+                    film(5004, 0, 10)]}}                       # barely known: left out
+            return super()._get(path, **params)
+    for p in (pid,):
+        db.set_meta(f"person_{p}", None)
+    extras.build_gaps(PeopleTMDB())
+    g = next(g for g in db.get_meta("gaps")["groups"] if g["type"] == "actor" and g["id"] == pid)
+    assert [i["tmdb_id"] for i in g["items"]] == [5002, 5001]   # best known first
+    assert g["owned"] == leads[pid] and g["total"] == leads[pid] + 2 and g["profile"]
+    db.set_meta(f"person_{pid}", None)

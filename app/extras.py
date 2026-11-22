@@ -65,7 +65,8 @@ def _safe(fn, a):
 # ------------------------------------------------------------------ collection gaps
 
 def build_gaps(tmdb=None, step=lambda *a: None):
-    """Movies missing from franchises/collections you own, and from directors you collect."""
+    """Movies missing from franchises/collections you own, from directors you collect, and from actors whose
+    leading roles you collect."""
     tmdb = tmdb or TMDB(config.TMDB_API_KEY)
     lib = [r for r in db.library() if r["tmdb_id"] > 0]
     owned = {r["tmdb_id"] for r in lib}
@@ -108,14 +109,21 @@ def build_gaps(tmdb=None, step=lambda *a: None):
                 directors[x["id"]] += 1
                 names[x["id"]] = (x["name"], x.get("profile"))
     top = [pid for pid, n in directors.most_common(40) if n >= 3]
-    step("Checking directors you collect", f"{len(top)} directors")
+    # actors you collect: 5+ films of yours where they're among the top three billed (a lead, not a cameo)
+    actors = Counter()
+    for d in det.values():
+        for x in (d.get("cast") or [])[:3]:
+            actors[x["id"]] += 1
+            names.setdefault(x["id"], (x["name"], x.get("profile")))
+    top_actors = [pid for pid, n in actors.most_common(30) if n >= 5 and pid not in directors]
+    step("Checking directors and actors you collect", f"{len(top)} directors, {len(top_actors)} actors")
     people = {}
-    for pid in top:
+    for pid in top + top_actors:
         v = db.get_meta(f"person_{pid}")
         if v and time.time() - v.get("_at", 0) < WEEK:
             people[pid] = v
     for pid, p in _parallel(lambda i: tmdb._get(f"/person/{i}", append_to_response="combined_credits"),
-                            [p for p in top if p not in people]).items():
+                            [p for p in top + top_actors if p not in people]).items():
         if p:
             p["_at"] = time.time()
             db.set_meta(f"person_{pid}", p)
@@ -128,8 +136,18 @@ def build_gaps(tmdb=None, step=lambda *a: None):
         missing = [_item(m, "movie", upcoming=m["release_date"] > today) for m in films.values() if m["id"] not in owned]
         if missing:
             missing.sort(key=lambda x: x["date"])
-            groups.append({"type": "director", "id": pid, "name": names[pid][0], "profile": names[pid][1],
+            groups.append({"type": "director", "id": pid, "name": names[pid][0], "profile": names[pid][1] or p.get("profile_path"),
                            "owned": directors[pid], "total": directors[pid] + len(missing), "items": missing})
+    for pid in top_actors:
+        p = people.get(pid) or {}
+        lead = {m["id"]: m for m in (p.get("combined_credits") or {}).get("cast", [])
+                if m.get("media_type") == "movie" and (m.get("order") is not None and m["order"] < 3) and m.get("release_date")
+                and (m.get("vote_count") or 0) >= 50}
+        missing = [_item(m, "movie", upcoming=m["release_date"] > today) for m in lead.values() if m["id"] not in owned]
+        if missing:   # their best-known leading roles first
+            missing.sort(key=lambda x: -(x.get("tmdb_votes") or 0))
+            groups.append({"type": "actor", "id": pid, "name": names[pid][0], "profile": names[pid][1] or p.get("profile_path"),
+                           "owned": actors[pid], "total": actors[pid] + len(missing), "items": missing[:12]})
     groups.sort(key=lambda g: (-g["owned"] / g["total"], -g["owned"]))
     db.set_meta("gaps", {"_at": time.time(), "groups": groups})
     return len(groups)

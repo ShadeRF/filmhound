@@ -1,0 +1,5 @@
+tests
+.github
+unraid
+**/__pycache__
+*.zip

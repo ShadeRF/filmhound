@@ -1,0 +1,17 @@
+services:
+  filmhound:
+    build: .
+    image: filmhound:latest
+    container_name: filmhound
+    restart: unless-stopped
+    ports:
+      - "8788:8788"
+    volumes:
+      - /mnt/user/appdata/filmhound/data:/data
+      - ./app:/srv/app   # live code: updates only need a container restart, not a rebuild
+    labels:
+      net.unraid.docker.icon: https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/icons/filmhound.png
+      net.unraid.docker.webui: http://[IP]:[PORT:8788]/
+    environment:
+      TZ: America/New_York
+      # Everything else is set on the Settings page (saved in /data/settings.json).

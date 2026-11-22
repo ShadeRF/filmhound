@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#0e0d0c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="/static/app.css?v=20">
+<link rel="stylesheet" href="/static/app.css?v=22">
 </head>
 <body>
 <header>
@@ -27,12 +27,12 @@
     </nav>
     <div class="seg media-seg" id="mediaSeg"><button data-m="movie" class="on">Movies</button><button data-m="tv">TV</button></div>
     <div class="status" id="status" title="">…</div>
-    <form class="gsearch" id="gsearch" role="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input type="search" id="gq" placeholder="Search any movie, show or person" aria-label="Search everything"></form>
+    <form class="gsearch" id="gsearch" role="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input type="search" id="gq" placeholder="Search titles and people" aria-label="Search titles and people"></form>
     <button class="ibtn" id="sync" title="Sync now: re-read Plex, Seerr, Radarr, Sonarr, Letterboxd and Trakt, then refresh your picks"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5"/></svg></button>
     <button class="ibtn" data-view="settings" id="gear" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </div>
   <div class="filters" id="filters">
-    <input type="search" id="q" placeholder="Filter these by title or director">
+    <input type="search" id="q" placeholder="Filter by title or director" aria-label="Filter by title or director">
     <button class="fbtn" data-pop="genres">Genres <span class="car">▼</span></button>
     <button class="fbtn" data-pop="years">Years <span class="car">▼</span></button>
     <button class="fbtn" data-pop="rating">Rating <span class="car">▼</span></button>
@@ -86,6 +86,6 @@
 <aside class="drawer" id="drawer" aria-label="Details"></aside>
 <div class="modal" id="trailer"><div class="modal-inner"><button class="close" id="trailerClose" aria-label="Close">×</button><div id="trailerFrame"></div></div></div>
 <div class="toast" id="toast"></div>
-<script src="/static/app.js?v=26"></script>
+<script src="/static/app.js?v=27"></script>
 </body>
 </html>

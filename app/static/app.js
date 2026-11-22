@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let media = "movie", view = "home", items = [], total = 0, offset = 0, current = null, lastStatus = {};
 const arrOpts = {};
+const CLICK = `<span class="no-touch">Click</span><span class="touch-only">Tap</span>`;   // "Tap" on touch screens
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
 function toast(msg, action) {
@@ -73,6 +74,7 @@ function syncControls() {
   set("length", !!F.runtime, F.runtime ? `≤ ${fmtRun(F.runtime)}` : (media === "tv" ? "Episode length" : "Length"));
   set("langs", F.langs.length > 0, F.langs.length === 1 ? langName(F.langs[0]) : `Language${F.langs.length ? ` <span class="n">${F.langs.length}</span>` : ""}`);
   set("nets", F.nets.length > 0, F.nets.length === 1 ? esc(F.nets[0]) : `Network${F.nets.length ? ` <span class="n">${F.nets.length}</span>` : ""}`);
+  filterFade();
 
   const chips = [];
   const chip = (label, fn, ex) => chips.push({ label, fn, ex });
@@ -126,7 +128,7 @@ function renderPop(k) {
   const pop = $("pop");
   if (k === "genres") {
     pop.style.width = "560px";
-    pop.innerHTML = `<h5>Genres</h5><div class="hint">Click once to include (gold), twice to exclude (red), three times to clear.</div>
+    pop.innerHTML = `<h5>Genres</h5><div class="hint">${CLICK} once to include (gold), twice to exclude (red), three times to clear.</div>
       <div class="gchips">${facets.genres.map(g => {
         const st = F.genres[g.name]; return `<button class="gchip ${st === 1 ? "inc" : st === -1 ? "exc" : ""}" data-g="${esc(g.name)}">${esc(g.name)}<small>${g.count}</small></button>`; }).join("")}</div>
       <div class="foot"><div>${inc().length > 1 ? `<span class="hint" style="margin:0 8px 0 0">Included genres:</span>
@@ -229,6 +231,7 @@ async function load(reset) {
       const r = await api(`/api/${view === "library" ? "library" : "recs"}?` + p);
       if (seq !== loadSeq) return;            // a newer filter change superseded this one
       total = r.total;
+      if (r.all != null) libAll = r.all;
       if (reset || !items.length) { items = r.items; render(); }
       else { items = items.concat(r.items); $("grid").insertAdjacentHTML("beforeend", r.items.map(card).join("")); updateCount(); }
       offset = phase1().length;
@@ -264,7 +267,7 @@ function divider() {
 }
 function updateCount() {
   const extra = items.filter(x => x.source).length;
-  if (view === "library") { $("count").textContent = total ? `${total.toLocaleString()} unwatched` : ""; return; }
+  if (view === "library") { $("count").textContent = total && anyFilter() ? `${total.toLocaleString()} match these filters` : ""; return; }
   $("count").textContent = total || extra ? `${total.toLocaleString()} top picks${extra ? ` + ${extra.toLocaleString()} deeper${moreDone ? "" : " · keeps going as you scroll"}` : ""}` : "";
 }
 function normSeeds(r) {   // older data stored titles only
@@ -357,6 +360,41 @@ window.addEventListener("scroll", () => {
   if (scrollTick) return; scrollTick = true;
   requestAnimationFrame(() => { scrollTick = false; if (items.length && (view === "picks" || view === "library") && nearBottom()) load(false); });
 }, { passive: true });
+// Phones: the header is fixed. Scrolling down tucks away the page tabs and the filter bar (the top bar with
+// logo, search, sync and settings stays); scrolling up brings them back. The page keeps room for the full header.
+const PHONE = matchMedia("(max-width: 560px)");
+const HDR = document.querySelector("header");
+let hdrFull = 0, lastY = 0;
+function measureHeader() {
+  if (HDR.classList.contains("tuck")) return;
+  hdrFull = HDR.offsetHeight;
+  document.body.style.setProperty("--hdr", hdrFull + "px");
+}
+function tuckHeader(on) {
+  if (on === HDR.classList.contains("tuck")) return;
+  HDR.classList.toggle("tuck", on);
+  if (!on) measureHeader();
+}
+new ResizeObserver(measureHeader).observe(HDR);
+window.addEventListener("scroll", () => {
+  const y = window.scrollY, dy = y - lastY;
+  if (!PHONE.matches || y <= 0) tuckHeader(false);
+  else if (dy > 6 && y > hdrFull && !openPop) tuckHeader(true);
+  else if (dy < -6) tuckHeader(false);
+  if (Math.abs(dy) > 6 || y <= 0) lastY = y;
+}, { passive: true });
+PHONE.addEventListener("change", () => tuckHeader(false));
+// the header search box is narrow on a phone: a short placeholder that fits
+const searchHint = () => { $("gq").placeholder = PHONE.matches ? "Search" : "Search titles and people"; };
+PHONE.addEventListener("change", searchHint); searchHint();
+// The filter bar scrolls sideways on narrow screens: fade its right edge while more controls are off-screen.
+function filterFade() {
+  const f = $("filters");
+  f.classList.toggle("fade-right", f.scrollWidth - f.scrollLeft - f.clientWidth > 2);
+}
+$("filters").addEventListener("scroll", filterFade, { passive: true });
+window.addEventListener("resize", filterFade);
+
 // any card anywhere opens the drawer; the cards around it become prev/next
 document.addEventListener("click", e => {
   const w = e.target.closest(".quick.wl");
@@ -381,7 +419,7 @@ async function quickHide(key, el) {
   } catch (e) { toast(e.message); return; }
   if (idx >= 0) { items.splice(idx, 1); if (!r.source) total--; updateCount(); }
   document.querySelectorAll(`.card[data-key="${key}"]`).forEach(x => x.remove());
-  toast(`Hid ${r.title}`, { label: "Undo", fn: async () => {
+  toast(`Not interested in ${r.title}`, { label: "Undo", fn: async () => {
     await api("/api/feedback/" + key, { method: "DELETE" });
     if (idx >= 0) { items.splice(idx, 0, r); if (!r.source) total++; render(); } else refreshView();
   } });
@@ -511,13 +549,13 @@ function renderDrawer(r, loading) {
       ${owned ? "" : `<button class="btn ${WL.has(r.key) || r.watchlist ? "on" : ""}" id="dWl" onclick="toggleWatch(${r.key})">${ICON.heart}${WL.has(r.key) || r.watchlist ? "On watchlist" : "Watchlist"}</button>`}
       ${r.trailer ? `<button class="btn" data-trailer="${esc(r.trailer)}">${ICON.play}Trailer</button>` : ""}
       <a class="btn" href="#/like/${r.media}/${r.tmdb_id}" onclick="closeDrawer()">${ICON.similar}More like this</a>
-      <button class="btn ${fbState === "seen" || r.my_rating ? "on" : ""}" onclick="toggleSeen()">${ICON.eye}${owned ? "Rate" : fbState === "seen" ? "Seen" : "I've seen it"}</button>
+      <button class="btn ${fbState === "seen" || r.my_rating ? "on" : ""}" onclick="toggleSeen()">${owned ? `${ICON.star}Rate` : `${ICON.eye}Seen it`}</button>
       ${owned ? "" : `<button class="btn" onclick="fb('dismissed')" title="Hide it and show fewer like it">${ICON.hide}Not interested</button>`}
     </div>
     <div class="seenbox" id="seenBox">
       <span>${owned ? "Your rating (saved to Plex)" : "How was it?"}</span>
       ${starsWidget(r.my_rating, 'id="seenStars"')}
-      ${owned ? "" : `<button class="link" onclick="markSeen(null)">Seen it, skip rating</button>`}
+      ${owned ? "" : `<button class="link" onclick="markSeen(null)">Seen it, no rating</button>`}
     </div>
     <div class="arr" id="arrBox">
       <div class="row">
@@ -542,9 +580,8 @@ function renderDrawer(r, loading) {
         <div class="info">
           <div class="nm">${esc(b.title)}${b.year ? ` <span class="muted">(${b.year})</span>` : ""}</div>
           <div class="st">${seedStatus(b)}</div>
-          ${b.share != null ? `<div class="meter"><i style="width:${Math.round(b.share * 100)}%"></i></div>` : ""}
+          ${b.share != null ? `<div class="meter" role="img" aria-label="How much this pushed the pick" title="How much this pushed the pick"><i style="width:${Math.round(b.share * 100)}%"></i></div>` : ""}
         </div>
-        ${b.share != null ? `<div class="pct">${Math.round(b.share * 100)}%</div>` : ""}
       </div>`).join("")}</div>
       ${r.seed_count > seeds.length ? `<div class="more-seeds">+ ${r.seed_count - seeds.length} more of your ${tv ? "shows" : "movies"} point here too</div>` : ""}</div>`
       : r.source === "taste" ? `<div class="sec"><h4>Why this pick</h4><p class="muted">Found through your taste for <b>${esc(r.stream)}</b>.</p></div>` : ""}
@@ -571,7 +608,7 @@ async function markSeen(rating) {
     r.my_rating = rating; r.feedback = "seen";
     const idx = items.indexOf(r);
     removeCurrent();
-    toast(rating ? `Rated ${r.title} ${starText(rating)}${where}` : `Marked ${r.title} as seen`,
+    toast(rating ? `Rated ${r.title} ${starText(rating)}${where}` : `Got it, you've seen ${r.title}`,
       r.owned ? null : { label: "Undo", fn: async () => { await api("/api/feedback/" + r.key, { method: "DELETE" }); if (idx >= 0) { items.splice(idx, 0, r); if (!r.source) total++; render(); } } });
   } catch (e) { toast(e.message); }
 }
@@ -601,7 +638,7 @@ async function fb(action) {
     await api("/api/feedback", { method: "POST", body: JSON.stringify({ tmdb_id: r.tmdb_id, media: r.media, action, title: r.title }) });
     const idx = items.indexOf(r);
     removeCurrent();
-    toast(`Hid ${r.title}`, { label: "Undo", fn: async () => { await api("/api/feedback/" + r.key, { method: "DELETE" }); if (idx >= 0) { items.splice(idx, 0, r); if (!r.source) total++; render(); } } });
+    toast(`Not interested in ${r.title}`, { label: "Undo", fn: async () => { await api("/api/feedback/" + r.key, { method: "DELETE" }); if (idx >= 0) { items.splice(idx, 0, r); if (!r.source) total++; render(); } } });
   } catch (e) { toast(e.message); }
 }
 async function requestIt() {
@@ -660,7 +697,7 @@ async function addArr() {
 // ---- history (hidden, seen & rated, requested)
 let hiddenRows = [], hiddenFilter = "seen", histShown = 120;
 const FB_GROUPS = {
-  seen: { label: "Seen & rated", match: r => ["seen", "liked", "disliked"].includes(r.action),
+  seen: { label: "Seen it", match: r => ["seen", "liked", "disliked"].includes(r.action),
     note: "Titles you've seen outside Plex: rated here, or imported from Letterboxd or Trakt. They shape your taste and never show up as picks." },
   dismissed: { label: "Not interested", match: r => r.action === "dismissed",
     note: "Hidden from your picks, and similar titles get nudged down. Restore one to bring it back." },
@@ -738,17 +775,24 @@ function drill(s, m) {
 }
 
 // ---- your library
+let libAll = 0;   // everything unwatched you own, before filters: what the collection picks from
+// Collection sizes on offer, never more than there is: 25, 50, 100, 250, or all of them when that's fewer.
+const collSizes = n => [...[25, 50, 100, 250].filter(x => x < n), ...(n && n <= 250 ? [n] : [])];
 function libHead() {
-  const n = total;
-  return `<div class="lib-banner">
-    <div><h3>Unwatched in your library</h3><p class="muted">${n ? `${n.toLocaleString()} ${media === "tv" ? "shows" : "movies"} you own but haven't watched, ranked by how well they fit your taste.` : ""}</p></div>
-    <button class="btn" id="pushColl" title="Creates (or refreshes) a collection in Plex so these show up on your TV">${ICON.send}Send top 50 to Plex</button>
+  const n = libAll, sizes = collSizes(n), pick = store.get("collSize");
+  const chosen = sizes.includes(+pick) ? +pick : sizes.filter(x => x <= 50).pop() || sizes[0];
+  return `<div class="list-head">
+    <div><h2>Your Library</h2><p class="muted">${n ? `${n.toLocaleString()} ${media === "tv" ? (n === 1 ? "show" : "shows") : (n === 1 ? "movie" : "movies")} you own but haven't watched, best for you first. The collection takes the top ones and replaces the one made last time.` : ""}</p></div>
+    ${n ? `<div class="lib-tools"><label class="inline">Collection size <select id="collN">${sizes.map(x =>
+      `<option value="${x}" ${x === chosen ? "selected" : ""}>${x === n ? `All ${x}` : x}</option>`).join("")}</select></label>
+    <button class="btn primary" id="pushColl" title="Makes (or replaces) a collection in Plex so these show up on your TV">Make Plex collection</button></div>` : ""}
   </div>`;
 }
+document.addEventListener("change", e => { if (e.target.id === "collN") store.set("collSize", e.target.value); });
 document.addEventListener("click", async e => {
   if (e.target.closest("#pushColl")) {
     const b = e.target.closest("#pushColl"); b.disabled = true;
-    try { const r = await api("/api/plex/collection", { method: "POST", body: JSON.stringify({ media, limit: 50 }) });
+    try { const r = await api("/api/plex/collection", { method: "POST", body: JSON.stringify({ media, limit: +($("collN")?.value || 50) }) });
       toast(`Plex collection “${r.name}” now has ${r.count} titles`); }
     catch (err) { toast(err.message); }
     b.disabled = false;
@@ -775,8 +819,8 @@ function rateShell(inner) {
       <span class="muted">${rateDone ? `${rateDone} rated this session` : ""}</span>
     </div>
     <p class="muted rate-help">${rateMode === "library"
-      ? "Ratings are the strongest signal Filmhound has. These go straight to Plex too. Click the left half of a star for a half star. Keys: <kbd>1</kbd>–<kbd>5</kbd> to rate (hold <kbd>Shift</kbd> for a half star: <kbd>Shift</kbd>+<kbd>4</kbd> is 3½), <kbd>S</kbd> skip."
-      : "If you've watched any of these somewhere else, rate them and they'll stop showing up as picks. Click the left half of a star for a half star. Keys: <kbd>1</kbd>–<kbd>5</kbd> rate (<kbd>Shift</kbd> for a half star), <kbd>N</kbd> haven't seen, <kbd>X</kbd> not interested."}</p>
+      ? `Ratings are the strongest signal Filmhound has. These go straight to Plex too. ${CLICK} the left half of a star for a half star. <span class="keys-help">Keys: <kbd>1</kbd>–<kbd>5</kbd> to rate (hold <kbd>Shift</kbd> for a half star: <kbd>Shift</kbd>+<kbd>4</kbd> is 3½), <kbd>S</kbd> skip.</span>`
+      : `If you've watched any of these somewhere else, rate them and they'll stop showing up as picks. ${CLICK} the left half of a star for a half star. <span class="keys-help">Keys: <kbd>1</kbd>–<kbd>5</kbd> rate (<kbd>Shift</kbd> for a half star), <kbd>N</kbd> haven't seen it, <kbd>K</kbd> seen it, no rating, <kbd>X</kbd> not interested.</span>`}</p>
     ${rateMode === "library" && lastStatus.letterboxd && !lastStatus.letterboxd_export ? `<p class="muted rate-help">Rated these on Letterboxd already? Only your latest diary entries have been read. <a href="#/settings">Upload your Letterboxd export</a> once and everything you've rated there drops off this list.</p>` : ""}
     ${inner}</div>`;
 }
@@ -800,7 +844,7 @@ function renderRate() {
         <div class="rate-stars">${starsWidget(0, 'id="rateStars"')}</div>
         <div class="rate-actions">
           ${rateMode === "library" ? `<button class="btn" data-ra="skip">Skip <kbd>S</kbd></button>`
-            : `<button class="btn" data-ra="unseen">Haven't seen it <kbd>N</kbd></button><button class="btn" data-ra="seen">Seen, no rating</button><button class="btn" data-ra="hide">${ICON.hide}Not interested <kbd>X</kbd></button>`}
+            : `<button class="btn" data-ra="unseen">Haven't seen it <kbd>N</kbd></button><button class="btn" data-ra="seen" title="Seen it, no rating">${ICON.eye}Seen it <kbd>K</kbd></button><button class="btn" data-ra="hide">${ICON.hide}Not interested <kbd>X</kbd></button>`}
         </div>
         ${rateRemaining > 1 ? `<div class="rate-next"><span class="muted">Up next</span>${nextPosters}${rateMode === "library" ? `<span class="muted">${(rateRemaining - 1).toLocaleString()} more</span>` : ""}</div>` : ""}
       </div>
@@ -843,6 +887,7 @@ document.addEventListener("keydown", e => {
   if (digit) rateAct("rate", +digit[1] * 2 - (e.shiftKey ? 1 : 0));
   else if (e.key === "s" || e.key === "S" || e.key === "n" || e.key === "N") rateAct("skip");
   else if ((e.key === "x" || e.key === "X") && rateMode === "picks") rateAct("hide");
+  else if ((e.key === "k" || e.key === "K") && rateMode === "picks") rateAct("seen");
 });
 
 // ---- person
@@ -903,11 +948,13 @@ $("personBody").addEventListener("click", e => { const b = e.target.closest("[da
 const WL = new Set();
 function rowOpts(row, r) {
   if (row.id === "gaps") return { role: r.gap };
-  if (row.id === "upcoming") return { role: upLabel(r) };
+  if (row.id === "upcoming") return { role: upLabel(r), badge: dateBadge(r) };
   return { why: row.id === "top" || row.id.startsWith("m") || ["gems", "new", "classics", "mine", "watchlist"].includes(row.id) };
 }
 const fmtDate = d => { try { return new Date(d + "T12:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }); } catch { return d; } };
-const upLabel = r => [r.date && fmtDate(r.date), (r.people || [])[0] || (r.matches || []).slice(0, 2).join(", ")].filter(Boolean).join(" · ");
+// Coming soon: the date shows once, as the badge on the poster; the caption says who or what it's for
+const upLabel = r => (r.people || [])[0] || (r.matches || []).slice(0, 2).join(", ");
+const dateBadge = r => r.date ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "";
 async function toggleWatch(key) {
   const r = REG.get(key) || current; if (!r) return;
   const on = !(WL.has(key) || r.watchlist);
@@ -936,7 +983,7 @@ async function loadWatchlist() {
   const want = d.items.filter(r => !r.owned), got = d.items.filter(r => r.owned);
   want.forEach(r => WL.add(r.key));
   listShell("Watchlist", want.length ? `${want.length} saved for later. Saving something also nudges your picks toward it a little.` : "",
-    want.length ? gridOf(want) : `<div class="empty">Nothing saved yet. Hover any poster and tap ${ICON.heart.replace("<svg", '<svg class="inl"')} to save it for later.</div>`);
+    want.length ? gridOf(want) : `<div class="empty">Nothing saved yet. Tap ${ICON.heart.replace("<svg", '<svg class="inl"')} on any title to add it to your watchlist.</div>`);
   if (got.length) $("listBody").insertAdjacentHTML("beforeend", `<h3 class="list-sub">Now in your library</h3>${gridOf(got, () => ({ noHide: true, badge: `<span class="match own">${ICON.check} In Plex</span>` }))}
     <p class="muted"><button class="link" id="wlClear">Clear these from your watchlist</button></p>`);
   const c = $("wlClear"); if (c) c.onclick = async () => {
@@ -994,7 +1041,7 @@ async function loadUpcoming() {
   if (my !== listSeq) return;   // you've moved on to another page since
   const soonest = d.items.slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   listShell("Coming soon for you", "Unreleased movies and shows that fit your taste, soonest first. Some come from directors, writers and actors you like; the rest match what you watch.",
-    soonest.length ? gridOf(soonest, r => ({ role: upLabel(r), badge: `<span class="match taste">${esc(fmtDate(r.date))}</span>` }))
+    soonest.length ? gridOf(soonest, r => ({ role: upLabel(r), badge: dateBadge(r) }))
       : `<div class="empty">${d.at ? "Nothing announced yet." : "This fills in after your next full sync."}</div>`);
 }
 $("listBody").addEventListener("click", e => { const b = e.target.closest("[data-gk]"); if (b) { gapKind = b.dataset.gk; loadGaps(); } });
@@ -1011,7 +1058,8 @@ const foldCard = (id, head, status, sub, body) => `<details class="scard fold" i
 const advanced = (id, body) => `<details class="adv" data-fold="${id}" ${openCards.has(id) ? "open" : ""}><summary>Advanced<span class="chev">›</span></summary>${body}</details>`;
 const openFor = id => { openCards.add(id); const d = document.querySelector(`#settingsBody [data-fold="${id}"]`); if (d) d.open = true; };
 let setSpy = null;
-const headerOffset = () => (document.querySelector("header")?.offsetHeight || 60) + 16;
+// the full header, even while it's tucked away on a phone (scrolling back up shows it again)
+const headerOffset = () => Math.max(document.querySelector("header")?.offsetHeight || 60, PHONE.matches ? hdrFull : 0) + 16;
 function setLayout(sections) {   // sections: [[id, menu label, html], …]
   const nav = `<nav class="setnav" id="setnav">${sections.map(([id, label]) => `<button type="button" data-jump="${id}">${label}</button>`).join("")}
     <p class="setnav-note">Changes to fields are saved with the bar at the bottom. Buttons act right away.</p></nav>`;
@@ -1055,6 +1103,7 @@ const SVC = {
   sonarr: { optional: true, title: "Sonarr", sub: "Optional. Add shows directly with a quality profile.", url: "SONARR_URL", key: "SONARR_API_KEY", keyLabel: "API key",
     urlHelp: "e.g. <code>http://192.168.1.10:8989</code>", keyHelp: "Sonarr → Settings → General → API Key" },
 };
+const SVC_SITE = { plex: "plex.tv", tmdb: "themoviedb.org", seerr: "overseerr.dev", radarr: "radarr.video", sonarr: "sonarr.tv" };   // for their icons
 const val = k => k in draft ? draft[k] : S.values[k];
 function srcTag(k) {
   const src = S.sources[k];
@@ -1115,9 +1164,13 @@ function svcCard(id) {
   // Every connection folds the same way. A card opens by itself when it needs attention:
   // a required one that isn't set up, or any whose last test failed.
   if (!c.optional && !set) openCards.add(id);
-  return foldCard(id, c.title, c.optional ? pill(set) : pill(set, "Set up", "Needed"), c.sub, body);
+  const head = `<img class="svc" src="${fav(SVC_SITE[id])}" alt=""> ${c.title}`;
+  return foldCard(id, head, c.optional ? pill(set) : pill(set, "Set up", "Needed"), c.sub, body);
 }
+const RANGE_FMT = {};   // how each slider shows its value, so moving it shows the same thing
+const allOr = v => +v ? v : "All";   // 0 = keep everything
 function rangeField(k, label, min, max, step, help, fmt = v => v) {
+  RANGE_FMT[k] = fmt;
   return `<div class="field"><label>${label} ${srcTag(k)}</label>
     <div class="rangeval"><input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${val(k)}"><output>${fmt(val(k))}</output></div>
     ${help ? `<div class="help">${help}</div>` : ""}</div>`;
@@ -1131,37 +1184,6 @@ function renderSettings() {
   const sections = [
     ["connections", "Connections", setSection("connections", "Connections",
       `${svcCard("plex")}${svcCard("tmdb")}${svcCard("seerr")}${svcCard("radarr")}${svcCard("sonarr")}`)],
-    ["taste", "Your taste", setSection("taste", "Your taste", `<div class="scard">
-      ${rangeField("OWNED_WEIGHT", "Titles you own, unwatched", 0, 1, 0.05,
-        "How much the things you've collected but not watched yet shape your taste. Keep it high if your library is curated; lower it if it's a bit of everything.", v => Math.round(v * 100) + "%")}
-      <h4>Don't learn from</h4>
-      <p class="sub">These stay in your library and still count as owned, but they stop shaping your picks.</p>
-      <div class="field"><label>Plex libraries</label><div id="noseedLibs" class="chips pick"><span class="muted">Sync once to list your libraries.</span></div></div>
-      <div class="field"><label>Genres</label><div class="chips pick">${NOSEED_GENRE_LIST.map(g =>
-        `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}</button>`).join("")}</div></div>
-      <div class="field"><label>Single titles</label><div id="noseedTitles"><span class="muted">None yet. Open any title you own and tick <b>Don't learn from this</b>.</span></div></div>
-    </div>`, "Ratings count most, then what you've watched, then what you own. These settings adjust the rest.")],
-    ["picks", "Picks", setSection("picks", "Picks", `<div class="scard">
-      ${rangeField("MIN_VOTES", "Minimum TMDB votes: movies", 0, 2000, 25, "Skip obscure titles with fewer votes than this. Older decades need far fewer, so classics aren't cut.")}
-      ${rangeField("MIN_VOTES_TV", "Minimum TMDB votes: TV", 0, 1000, 10)}
-      ${advanced("picks-adv", `
-        <div class="field"><label>IMDb ratings ${srcTag("IMDB_ENABLED")}</label>
-          <div><label class="switch"><input type="checkbox" data-k="IMDB_ENABLED" ${val("IMDB_ENABLED") ? "checked" : ""}><span></span></label></div>
-          <div class="help">Downloads IMDb's official ratings file weekly (~8 MB) for better quality scores.</div></div>
-        <h4>Movies</h4>
-        ${rangeField("MAX_RECS", "Picks to keep", 100, 3000, 100)}
-        ${rangeField("CANDIDATE_POOL", "Candidates to score", 200, 5000, 100, "More = broader picks, slower first sync.")}
-        <h4>TV shows</h4>
-        ${rangeField("MAX_RECS_TV", "Picks to keep", 50, 2000, 50)}
-        ${rangeField("CANDIDATE_POOL_TV", "Candidates to score", 100, 3000, 100)}`)}
-    </div>
-    <div class="scard" id="provCard">
-      <div class="cardhead"><h3>Streaming services</h3>${pill((val("MY_PROVIDERS") || []).length, `${(val("MY_PROVIDERS") || []).length} chosen`, "None chosen")}</div>
-      <p class="sub">Pick the services you pay for. Their logos show on posters, and the <b>On my services</b> filter shows only what you can watch right now.</p>
-      <div class="field"><label>Country ${srcTag("WATCH_REGION")}</label><select data-k="WATCH_REGION" id="regionSel"><option>${esc(val("WATCH_REGION"))}</option></select></div>
-      <div class="provgrid" id="provGrid"><div class="shimmer" style="height:90px"></div></div>
-      <div class="help" style="margin-top:8px">Availability comes from JustWatch through TMDB. Changing country refreshes it on the next sync.</div>
-    </div>`)],
     ["history", "Watch history", setSection("history", "Watch history", `
       ${foldCard("letterboxd", `<img class="svc" src="${fav("letterboxd.com")}" alt=""> Letterboxd`,
         lbSet && !lbExport ? `<span class="pill warn">Export not uploaded</span>` : pill(lbSet, lbExport ? "Full history" : "Set up"),
@@ -1181,9 +1203,39 @@ function renderSettings() {
         <div class="help">Create a free app at trakt.tv/oauth/applications (any name, redirect <code>urn:ietf:wg:oauth:2.0:oob</code>) and paste its Client ID. Your profile needs to be public.</div></div>
       <div class="field"><label></label><div><button class="btn" data-import="trakt">Sync Trakt now</button></div></div>`)}`,
       "Movies you've watched outside Plex train your taste and stop showing up as picks.")],
+    ["taste", "Your taste", setSection("taste", "Your taste", `<div class="scard">
+      ${rangeField("OWNED_WEIGHT", "Titles you own, unwatched", 0, 1, 0.05,
+        "How much the things you've collected but not watched yet shape your taste. Keep it high if your library is curated; lower it if it's a bit of everything.", v => Math.round(v * 100) + "%")}
+      <h4>Don't learn from</h4>
+      <p class="sub">These stay in your library and still count as owned, but they stop shaping your picks.</p>
+      <div class="field"><label>Plex libraries</label><div id="noseedLibs" class="chips pick"><span class="muted">Sync once to list your libraries.</span></div></div>
+      <div class="field"><label>Genres</label><div class="chips pick">${NOSEED_GENRE_LIST.map(g =>
+        `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}</button>`).join("")}</div></div>
+      <div class="field"><label>Single titles</label><div id="noseedTitles"><span class="muted">None yet. Open any title you own and tick <b>Don't learn from this</b>.</span></div></div>
+    </div>`, "Ratings count most, then what you've watched, then what you own. These settings adjust the rest.")],
+    ["picks", "Picks", setSection("picks", "Picks", `<div class="scard">
+      ${rangeField("MIN_VOTES", "Minimum TMDB votes: movies", 0, 2000, 25, "Skip obscure titles with fewer votes than this. Older decades need far fewer, so classics aren't cut.")}
+      ${rangeField("MIN_VOTES_TV", "Minimum TMDB votes: TV", 0, 1000, 10)}
+      ${advanced("picks-adv", `
+        <div class="opt"><label class="inline"><input type="checkbox" data-k="IMDB_ENABLED" ${val("IMDB_ENABLED") ? "checked" : ""}> Use IMDb ratings ${srcTag("IMDB_ENABLED")}</label>
+          <p class="help">Downloads IMDb's official ratings file weekly (~8 MB) for better quality scores.</p></div>
+        <h4>Movies</h4>
+        ${rangeField("MAX_RECS", "Picks to keep", 0, 3000, 100, "<b>All</b> keeps every pick that scores. Lower it to keep only the best ones.", allOr)}
+        ${rangeField("CANDIDATE_POOL", "Candidates to score", 200, 5000, 100, "More = broader picks, slower first sync.")}
+        <h4>TV shows</h4>
+        ${rangeField("MAX_RECS_TV", "Picks to keep", 0, 2000, 50, "", allOr)}
+        ${rangeField("CANDIDATE_POOL_TV", "Candidates to score", 100, 3000, 100)}`)}
+    </div>
+    <div class="scard" id="provCard">
+      <div class="cardhead"><h3>Streaming services</h3>${pill((val("MY_PROVIDERS") || []).length, `${(val("MY_PROVIDERS") || []).length} chosen`, "None chosen")}</div>
+      <p class="sub">Pick the services you pay for. Their logos show on posters, and the <b>On my services</b> filter shows only what you can watch right now.</p>
+      <div class="field"><label>Country ${srcTag("WATCH_REGION")}</label><select data-k="WATCH_REGION" id="regionSel"><option>${esc(val("WATCH_REGION"))}</option></select></div>
+      <div class="provgrid" id="provGrid"><div class="shimmer" style="height:90px"></div></div>
+      <div class="help" style="margin-top:8px">Availability comes from JustWatch through TMDB. Changing country refreshes it on the next sync.</div>
+    </div>`)],
     ["plex", "Plex", setSection("plex", "Plex", `<div class="scard">
       <div class="field"><label>Collection name ${srcTag("PLEX_COLLECTION")}</label>${input("PLEX_COLLECTION")}
-        <div class="help">Used by <b>Send top 50 to Plex</b> on the Your Library page. Filmhound replaces this collection each time.</div></div>
+        <div class="help">Used by <b>Make Plex collection</b> on the Your Library page. Filmhound replaces this collection each time.</div></div>
       <h4>Copy Letterboxd &amp; Trakt ratings to Plex</h4>
       <div class="field"><label>Automatically ${srcTag("RATINGS_TO_PLEX")}</label>
         <select data-k="RATINGS_TO_PLEX">
@@ -1208,7 +1260,7 @@ function renderSettings() {
         <div class="stat"><b>${st.shows.toLocaleString()}</b><span>shows in Plex</span></div>
         <div class="stat"><b>${st.cached.toLocaleString()}</b><span>titles cached from TMDB</span></div>
         <div class="stat"><b>${st.imdb ? (st.imdb / 1e6).toFixed(1) + "M" : "—"}</b><span>IMDb ratings</span></div>
-        <div class="stat"><b>${st.feedback}</b><span>hidden &amp; rated</span></div>
+        <div class="stat"><b>${st.feedback}</b><span>titles with feedback</span></div>
         <div class="stat"><b>${(st.db_bytes / 1e6).toFixed(0)} MB</b><span>database</span></div>
       </div>
       <p class="sub">Last full sync: ${when(st.last_sync)} · IMDb ratings updated: ${when(st.imdb_at)}</p>
@@ -1216,7 +1268,7 @@ function renderSettings() {
         <button class="btn" id="setSync">Sync now</button>
         <button class="btn" data-maint="refresh-imdb">Refresh IMDb ratings on next sync</button>
         <button class="btn warn" data-maint="clear-cache">Clear TMDB cache</button>
-        <button class="btn warn" data-maint="clear-feedback">Reset hidden &amp; rated</button>
+        <span class="resetfb"><button class="btn warn" data-maint="clear-feedback" data-ask>Reset all feedback</button><span class="muted">${st.feedback.toLocaleString()} title${st.feedback === 1 ? "" : "s"}</span></span>
       </div>
     </div>`)],
     ["signin", "Sign-in", setSection("signin", "Sign-in", `<div class="scard">
@@ -1267,7 +1319,7 @@ $("settingsBody").addEventListener("input", e => {
   const el = e.target, k = el.dataset.k;
   if (k) {
     draft[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? +el.value : el.value;
-    if (el.type === "range") el.nextElementSibling.textContent = k === "OWNED_WEIGHT" ? Math.round(el.value * 100) + "%" : el.value;
+    if (el.type === "range") el.nextElementSibling.textContent = (RANGE_FMT[k] || (v => v))(el.value);
     const svc = Object.keys(SVC).find(id => SVC[id].url === k || SVC[id].key === k);
     if (svc) { $("tres-" + svc).textContent = ""; }
     setDirty(true);
@@ -1296,13 +1348,25 @@ $("settingsBody").addEventListener("click", async e => {
   if (e.target.id === "setSync") { try { await api("/api/sync", { method: "POST" }); wasRunning = true; poll(); toast("Sync started"); } catch (err) { toast(err.message); } return; }
   const m = e.target.closest("[data-maint]");
   if (m) {
-    if (m.classList.contains("warn") && !m.classList.contains("armed")) {
+    if (m.hasAttribute("data-ask")) { if (!window.confirm(RESET_FEEDBACK)) return; }
+    else if (m.classList.contains("warn") && !m.classList.contains("armed")) {
       m.classList.add("armed"); m.dataset.label = m.textContent; m.textContent = "Click again to confirm";
       setTimeout(() => { m.classList.remove("armed"); if (m.dataset.label) m.textContent = m.dataset.label; }, 4000); return;
     }
     try { await api("/api/maintenance/" + m.dataset.maint, { method: "POST" }); toast("Done"); loadSettings(); } catch (err) { toast(err.message); }
   }
 });
+// What /api/maintenance/clear-feedback deletes: every row of the feedback table (all of History) and the
+// Letterboxd export marker. Ratings stored in Plex, the watchlist and "Don't learn from" live elsewhere.
+const RESET_FEEDBACK = `Reset all feedback?
+
+This clears everything on the History page:
+• titles you marked Not interested or Seen it
+• star ratings you gave titles you don't own in Plex
+• everything imported from Letterboxd and Trakt
+• the Requested and Added lists
+
+Ratings saved to Plex, your watchlist and Don't learn from stay as they are. Trakt and your recent Letterboxd diary come back at the next sync; upload your Letterboxd export again for the rest.`;
 async function testSvc(id, quiet) {
   const out = $("tres-" + id); if (!out) return;
   out.className = "tres"; out.textContent = "Testing…";
@@ -1432,9 +1496,11 @@ function showView(v, keepFilters) {
   document.querySelectorAll("#nav button, #gear").forEach(b => b.classList.toggle("on", b.dataset.view === v));
   const gridView = v === "picks" || v === "library";
   $("filters").style.display = $("activeRow").style.display = gridView ? "" : "none";
+  if (gridView) requestAnimationFrame(filterFade);
   $("mediaSeg").style.visibility = ["setup", "history", "settings", "person", "search", "like"].includes(v) ? "hidden" : "";
   if (v !== "settings") $("savebar").classList.remove("on");
-  closePop(); closeDrawer(); window.scrollTo(0, 0);
+  if (v !== "search") $("gq").value = "";   // leaving search clears the box
+  closePop(); closeDrawer(); window.scrollTo(0, 0); tuckHeader(false);
   if (gridView) {
     if (!keepFilters) loadF();
     syncControls();
@@ -1498,7 +1564,7 @@ const APP_SETUP = {
   syncText: "Filmhound is reading your library and looking up every title on TMDB. A few thousand titles take a few minutes.",
   waitTips: [
     { title: "Rate what you've watched", why: "Ratings are the strongest signal there is. The Rate page goes one title at a time.", label: "Open Rate", view: "rate" },
-    { title: "Upload your Letterboxd export", why: "If you use Letterboxd, this brings in everything you've rated there.", label: "Set up", card: "letterboxd" },
+    { title: "Upload your Letterboxd export", why: "If you use Letterboxd, this brings in everything you've rated there.", label: "Set up", card: "letterboxd", done: () => !!lastStatus.letterboxd_export },
   ],
   readyText: "Every pick shows why it was picked. Rate a few titles and your picks get sharper.",
   doneLabel: "See your picks",
@@ -1581,8 +1647,8 @@ function renderSetup() {
         : `<p class="lead">${APP_SETUP.syncText}</p>
           <div class="wz-progress"><div class="bar-track"><div class="bar-fill wz-indef"></div></div><p class="muted" id="wzStep">${esc(s.step && s.step !== "idle" ? s.step + (s.progress ? " · " + s.progress : "") + "…" : "Starting…")}</p></div>
           <h4 class="wz-h4">While you wait</h4>
-          <div class="wz-list">${APP_SETUP.waitTips.map(t => `<div class="wz-item"><div><b>${t.title}</b><p>${t.why}</p></div>
-            <button class="btn" ${t.card ? `data-wz-card="${t.card}"` : `data-wz-go="${t.view}"`}>${t.label}</button></div>`).join("")}</div>
+          <div class="wz-list">${APP_SETUP.waitTips.map(t => { const done = !!(t.done && t.done()); return `<div class="wz-item"><div><b>${t.title}</b>${done ? pill(true, "Done") : ""}<p>${t.why}</p></div>
+            <button class="btn" ${t.card ? `data-wz-card="${t.card}"` : `data-wz-go="${t.view}"`}>${done && t.card ? "Change" : t.label}</button></div>`; }).join("")}</div>
           <p class="muted">You can leave this page; the sync keeps going.</p>`}`;
     if (!ready) wzTimer = setInterval(async () => {
       if (view !== "setup") return clearInterval(wzTimer);

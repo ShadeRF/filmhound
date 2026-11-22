@@ -87,7 +87,6 @@
   .seed .st .k { color: var(--accent); }
   .seed .meter { height: 4px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
   .seed .meter i { display: block; height: 100%; background: var(--accent); }
-  .seed .pct { color: var(--dim); font-size: 12px; width: 38px; text-align: right; flex: none; }
   .more-seeds { color: var(--dim); font-size: 12px; margin-top: 2px; }
   .arr { margin: 0 22px 22px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; display: none; }
   .arr.on { display: block; }
@@ -155,12 +154,6 @@
   .rangeval { display: flex; align-items: center; gap: 12px; }
   .rangeval input[type=range] { flex: 1; accent-color: var(--accent); border: 0; padding: 0; background: transparent; }
   .rangeval output { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
-  .switch { position: relative; width: 38px; height: 22px; display: inline-block; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 11px; cursor: pointer; transition: background .15s; }
-  .switch span::after { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--text); border-radius: 50%; transition: transform .15s; }
-  .switch input:checked + span { background: var(--accent); }
-  .switch input:checked + span::after { transform: translateX(16px); }
   .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
   .stat { background: #1d1a17; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
   .stat b { display: block; font: 600 20px/1.2 Georgia, serif; }
@@ -509,7 +502,8 @@ details.fold > summary:focus-visible, details.adv > summary:focus-visible { outl
 .wz-actions .btn[disabled] { opacity: .45; cursor: default; }
 .wz-skip { font-size: 13px; }
 .wz-skip a { color: var(--accent); }
-.wz .scard .testrow, .wz .scard .libs { margin-left: 184px; }
+.wz .scard .testrow { margin-left: 184px; }
+.wz .scard .libs { margin-left: 0; }   /* the library chips sit inside their field already */
 .wz-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 18px; }
 .wz-item { display: flex; align-items: center; gap: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
 .wz-item > div { flex: 1; min-width: 0; }
@@ -538,3 +532,30 @@ details.fold > summary:focus-visible, details.adv > summary:focus-visible { outl
 .wz-progress .bar-track { width: 100%; margin: 0; }
 /* phones: the search box takes whatever room is left, so the header stays on one line */
 @media (max-width: 560px) { .bar { gap: 6px; } .bar .gsearch { flex: 1 1 0; width: auto; min-width: 0; } .media-seg { margin-left: 0; } .media-seg button { padding: 5px 9px; } }
+
+/* on/off settings: a checkbox with its explanation under it (same in Filmhound and Recordhound) */
+.opt { margin: 6px 0 12px; }
+.opt .help { margin: 2px 0 0 24px; color: var(--dim); font-size: 12px; }
+.resetfb { display: inline-flex; align-items: center; gap: 8px; }
+.resetfb .muted { font-size: 13px; }
+/* Your Library: collection size and button */
+.lib-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lib-tools select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; font: inherit; }
+.seed .meter { cursor: help; }
+/* touch screens: no keyboard shortcuts, and "Tap" instead of "Click" */
+.touch-only { display: none; }
+@media (hover: none) {
+  .keys-help, .rate kbd { display: none; }
+  .no-touch { display: none; }
+  .touch-only { display: inline; }
+}
+/* filter bar: one line that scrolls sideways; the right edge fades while more controls are off-screen */
+.fbtn, .filters .sort { white-space: nowrap; flex: none; }
+.filters.fade-right:not(:has(.pop.on)) { -webkit-mask-image: linear-gradient(to left, transparent, #000 44px); mask-image: linear-gradient(to left, transparent, #000 44px); }
+/* phones: the header is fixed; scrolling down tucks away the page tabs and filter bar, scrolling up brings them back */
+@media (max-width: 560px) {
+  header { position: fixed; top: 0; left: 0; right: 0; }
+  body { padding-top: var(--hdr, 160px); }
+  header.tuck .tabs, header.tuck .filters, header.tuck .active-row { display: none; }
+  .filters input[type=search] { min-width: 200px; }
+}

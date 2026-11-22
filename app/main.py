@@ -407,19 +407,20 @@ def test_service(service: str, values: dict):
             info = plex._get("/")
             libs = [{"title": d.get("title"), "type": d.get("type")}
                     for d in plex._get("/library/sections").get("Directory", []) if d.get("type") in ("movie", "show")]
-            return {"ok": True, "message": f"Connected to {info.get('friendlyName', 'Plex')} (v{str(info.get('version', '?')).split('-')[0]})",
+            found = f"{len(libs)} librar{'y' if len(libs) == 1 else 'ies'}" if libs else "no movie or TV libraries"
+            return {"ok": True, "message": f"Connected to {info.get('friendlyName', 'Plex')} v{str(info.get('version', '?')).split('-')[0]} · {found}",
                     "libraries": libs}
         if service == "tmdb":
             if not v["TMDB_API_KEY"]:
                 raise APIError("Enter a TMDB key")
             TMDB(v["TMDB_API_KEY"])._get("/configuration")
-            return {"ok": True, "message": "TMDB key works"}
+            return {"ok": True, "message": "Connected to TMDB"}
         if service == "seerr":
             if not v["SEERR_URL"] or not v["SEERR_API_KEY"]:
                 raise APIError("Enter the Seerr URL and API key")
             st = _ping(v["SEERR_URL"], "/api/v1/status")
             me = _ping(v["SEERR_URL"], "/api/v1/auth/me", v["SEERR_API_KEY"])
-            return {"ok": True, "message": f"Connected to Seerr v{st.get('version', '?')} as {me.get('displayName') or me.get('email') or 'API user'}"}
+            return {"ok": True, "message": f"Connected to Seerr v{st.get('version', '?')} · signed in as {me.get('displayName') or me.get('email') or 'API user'}"}
         if service in ("radarr", "sonarr"):
             url, key = v[f"{service.upper()}_URL"], v[f"{service.upper()}_API_KEY"]
             if not url or not key:
@@ -447,6 +448,8 @@ def maintenance(action: str):
     c = db.conn()
     if action == "clear-feedback":
         c.execute("DELETE FROM feedback")
+        # the imported Letterboxd history is gone too, so Settings asks for the export again
+        c.execute("DELETE FROM meta WHERE key IN ('lb_export_at', 'lb_match')")
         schedule_rescore(5)
     elif action == "clear-cache":
         if syncer.state["running"]:
@@ -605,8 +608,10 @@ def _visible_lib(media):
 
 @app.get("/api/library")
 def library(media: str = "movie", offset: int = 0, limit: int = 60, f: filters.Filters = Depends(filters.parse)):
-    rows = filters.apply(_visible_lib(media), f)
-    return _fast({"total": len(rows), "items": rows[offset:offset + limit]})
+    everything = _visible_lib(media)
+    rows = filters.apply(everything, f)
+    # "all" is before filters: the Plex collection is made from the whole list
+    return _fast({"total": len(rows), "all": len(everything), "items": rows[offset:offset + limit]})
 
 
 class CollectionBody(BaseModel):

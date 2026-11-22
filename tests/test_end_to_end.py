@@ -546,3 +546,35 @@ def test_old_imdb_table_is_converted_on_the_next_load():
     db.imdb_replace(iter([("tt6", 6.0, 6), ("tt7", 7.0, 7)]))
     assert "WITHOUT ROWID" in c.execute("SELECT sql FROM sqlite_master WHERE name='imdb_ratings'").fetchone()[0]
     assert db.imdb_count() == 2 and db.imdb_get_many(["tt5", "tt6"]) == {"tt6": (6.0, 6)}
+
+
+def test_reset_all_feedback_clears_history_and_the_letterboxd_marker():
+    """Reset all feedback empties History, and Settings asks for the Letterboxd export again."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    from app import imports
+    db.init()
+    c = TestClient(m.app)
+    db.set_feedback(999001, "dismissed", "Gone")
+    db.set_feedback(999002, "seen", "Seen", rating=8, source="letterboxd")
+    db.set_meta("lb_export_at", 123)
+    db.set_meta("lb_match", {"Seen|2000": 999002})
+    db.commit()
+    assert imports.letterboxd_export_done()
+    assert c.post("/api/maintenance/clear-feedback").status_code == 200
+    assert c.get("/api/feedback").json() == []
+    assert not imports.letterboxd_export_done()
+
+
+def test_library_says_how_many_there_are_before_filters():
+    """Your Library offers collection sizes from everything unwatched, whatever the filters show."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    db.init()
+    s = Syncer(lambda: FakePlex(), lambda: FakeTMDB(), lambda: FakeSeerr(), lambda: iter([("tt0000025", 8.4, 50000)]))
+    s.run(full=True)
+    c = TestClient(m.app)
+    everything = c.get("/api/library?media=movie").json()
+    assert everything["all"] == everything["total"]
+    narrowed = c.get("/api/library?media=movie&q=zzzz-no-such-title").json()
+    assert narrowed["total"] == 0 and narrowed["all"] == everything["all"]

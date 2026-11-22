@@ -304,3 +304,170 @@ def test_saved_keys_show_only_their_last_characters_and_typed_keys_can_be_reveal
     assert field.get_attribute("type") == "password"
     field.fill("")
     assert eye.is_hidden()
+
+
+def test_rate_page_seen_it_without_a_rating_is_k(page, site):
+    db = site["db"]
+    go(page, "rate")
+    page.locator('#rateSeg [data-mode="picks"]').click()
+    settle(page)
+    seen = page.locator('[data-ra="seen"]')
+    assert seen.inner_text().startswith("Seen it") and seen.locator("kbd").inner_text() == "K"
+    assert "K" in page.locator(".rate-help .keys-help").first.inner_text()
+    title = lambda: page.locator(".rate-info h2").first.inner_text()   # noqa: E731
+    first = title()
+    before = set(db.feedback())
+    page.keyboard.press("k")
+    settle(page)
+    added = [k for k in db.feedback() if k not in before]
+    try:
+        assert title() != first and len(added) == 1
+        assert db.feedback()[added[0]]["action"] == "seen" and db.feedback()[added[0]]["rating"] is None
+    finally:
+        for k in added:
+            db.delete_feedback(k)
+        db.commit()
+        db.bump()
+
+
+def test_drawer_wording_and_why_this_pick_bars(page):
+    go(page, "picks")
+    page.locator("#grid .card[data-key]").first.click()
+    settle(page)
+    actions = page.locator("#drawer .d-actions").inner_text()
+    assert "Seen it" in actions and "Not interested" in actions and "I've seen it" not in actions
+    assert page.locator("#drawer .seed .pct").count() == 0, "the percentage next to each reason should be gone"
+    meters = page.locator("#drawer .seed .meter")
+    assert meters.count() > 0 and meters.first.get_attribute("aria-label") == "How much this pushed the pick"
+    page.locator("#drawer .d-actions button", has_text="Not interested").click()
+    page.wait_for_timeout(300)
+    assert page.locator("#toast").inner_text().startswith("Not interested in ")
+    page.locator("#toast button", has_text="Undo").click()
+    settle(page)
+
+
+def test_settings_order_icons_and_checkboxes(page):
+    go(page, "settings")
+    order = page.evaluate("[...document.querySelectorAll('#setnav [data-jump]')].map(b => b.dataset.jump)")
+    assert order == ["connections", "history", "taste", "picks", "plex", "sync", "signin"]
+    for card in ("plex", "tmdb", "seerr", "radarr", "sonarr", "letterboxd", "trakt"):
+        assert page.locator(f"#svc-{card} summary img.svc").count() == 1, f"{card} has no icon"
+    assert page.locator("#settingsBody .switch").count() == 0
+    assert page.locator('#settingsBody .opt input[type=checkbox][data-k="IMDB_ENABLED"]').count() == 1
+    # Plex test: name, version, then what was found
+    page.evaluate("document.getElementById('svc-plex').open = true")
+    page.locator('[data-test="plex"]').click()
+    settle(page)
+    assert page.locator("#tres-plex").inner_text() == "✓ Connected to Test Plex v1.40.0 · 3 libraries"
+    # Picks to keep: 0 means keep all, and the slider can get back to it
+    page.evaluate("document.querySelector('[data-fold=picks-adv]').open = true")
+    for k in ("MAX_RECS", "MAX_RECS_TV"):
+        slider = page.locator(f'#settingsBody input[type=range][data-k="{k}"]')
+        assert slider.get_attribute("min") == "0"
+        out = slider.locator("xpath=following-sibling::output")
+        slider.evaluate("el => { el.value = 500; el.dispatchEvent(new Event('input', { bubbles: true })); }")
+        assert out.inner_text() == "500"
+        slider.evaluate("el => { el.value = 0; el.dispatchEvent(new Event('input', { bubbles: true })); }")
+        assert out.inner_text() == "All"
+    page.locator("#discard").click()
+    # Reset all feedback asks first and says what it clears; saying no changes nothing
+    asked = []
+    page.once("dialog", lambda d: (asked.append(d.message), d.dismiss()))
+    page.locator('[data-maint="clear-feedback"]').click()
+    settle(page)
+    assert page.locator('[data-maint="clear-feedback"]').inner_text() == "Reset all feedback"
+    assert asked and all(w in asked[0] for w in ("Not interested", "Seen it", "Letterboxd", "Trakt", "Requested", "Plex"))
+    assert page.locator(".resetfb .muted").inner_text().endswith(("title", "titles"))
+
+
+def test_your_library_page(page):
+    go(page, "library")
+    page.wait_for_selector("#libHead h2")
+    assert page.locator("#libHead h2").inner_text() == "Your Library"
+    sub = page.locator("#libHead p").inner_text()
+    assert "you own but haven't watched, best for you first" in sub
+    n = int(sub.split()[0].replace(",", ""))
+    sizes = page.evaluate("[...document.querySelectorAll('#collN option')].map(o => +o.value)")
+    assert sizes and max(sizes) <= n and (n > 250 or n in sizes), (n, sizes)
+    assert page.locator("#libHead label", has_text="Collection size").count() == 1
+    assert page.locator("#pushColl").inner_text() == "Make Plex collection"
+    assert "unwatched" not in page.locator("#count").inner_text()
+
+
+def test_header_search_clears_when_you_leave_search(page):
+    go(page, "search/noir")
+    assert page.locator("#gq").input_value() == "noir"
+    go(page, "picks")
+    assert page.locator("#gq").input_value() == ""
+
+
+def test_coming_soon_shows_the_date_once(page):
+    go(page, "upcoming")
+    cards = page.locator("#listBody .card[data-key]")
+    assert cards.count() > 0, "the test library should have something coming soon"
+    for i in range(cards.count()):
+        c = cards.nth(i)
+        badge = c.locator(".match").inner_text()
+        assert badge, "the date belongs on the poster"
+        assert badge not in c.inner_text().replace(badge, "", 1), "the date shows twice"
+
+
+def test_empty_watchlist_never_says_hover(page):
+    go(page, "watchlist")
+    assert "hover" not in view(page).inner_text().lower()
+
+
+def test_setup_library_chips_line_up_with_the_fields(page, site):
+    config = site["config"]
+    keep = config.PLEX_URL, config.PLEX_TOKEN
+    config.PLEX_URL, config.PLEX_TOKEN = "", ""
+    try:
+        page.goto(page.base)
+        settle(page)
+        page.locator('[data-wz="next"]').click()
+        page.locator('[data-wz-k="PLEX_URL"]').fill("http://plex.test:32400")
+        page.locator('[data-wz-k="PLEX_TOKEN"]').fill("test-token")
+        page.locator('[data-wz="test"]').click()
+        settle(page)
+        chips, url = page.locator(".wz-libs").bounding_box(), page.locator('[data-wz-k="PLEX_URL"]').bounding_box()
+        assert abs(chips["x"] - url["x"]) < 4, "the library chips are indented past the fields"
+    finally:
+        config.PLEX_URL, config.PLEX_TOKEN = keep
+
+
+def test_phone_header_tucks_away_while_scrolling_down(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    ctx.route("**/*", lambda r: r.continue_() if r.request.url.startswith(site["base"]) else r.abort())
+    p = ctx.new_page()
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        p.goto(site["base"] + "#/picks")
+        p.wait_for_load_state("networkidle")
+        p.wait_for_timeout(200)
+        # filter buttons stay on one line, and the right edge fades while more are off-screen
+        assert p.evaluate("[...document.querySelectorAll('#filters .fbtn')].every(b => getComputedStyle(b).whiteSpace === 'nowrap')")
+        assert p.evaluate("document.getElementById('filters').classList.contains('fade-right')")
+        p.evaluate("document.getElementById('filters').scrollLeft = 99999")
+        p.wait_for_timeout(100)
+        assert not p.evaluate("document.getElementById('filters').classList.contains('fade-right')")
+        # the first card isn't hidden under the header
+        first = p.locator("#grid .card").first.bounding_box()
+        assert first["y"] >= p.locator("header").bounding_box()["height"] - 1
+        for _ in range(4):
+            p.mouse.wheel(0, 300)
+            p.wait_for_timeout(150)
+        assert p.locator("#nav").is_hidden() and p.locator("#filters").is_hidden()
+        assert p.locator("#gsearch").is_visible() and p.locator("#gear").is_visible()
+        assert p.locator("#gear").bounding_box()["y"] >= 0, "the top bar should stay pinned"
+        p.mouse.wheel(0, -200)
+        p.wait_for_timeout(150)
+        assert p.locator("#nav").is_visible() and p.locator("#filters").is_visible()
+        # touch screens: no keyboard help on the Rate page, and "Tap" rather than "Click"
+        p.goto(site["base"] + "#/rate")
+        p.wait_for_load_state("networkidle")
+        help_text = p.locator(".rate-help").first.inner_text()
+        assert "Tap the left half" in help_text and "Click" not in help_text and "Keys:" not in help_text
+        assert not errors, errors
+    finally:
+        ctx.close()

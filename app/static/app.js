@@ -1155,6 +1155,13 @@ function input(k, type = "text", ph = "") {
   if (isSecret(k, v)) return secretInput("data-k", k, v, ph);
   return `<input type="${type}" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">`;
 }
+// What "Don't learn from" leaves out right now, in one line (same as Recordhound)
+function nsSummary() {
+  const out = [...(val("NOSEED_LIBRARIES") || []).map(l => `the ${l} library`), ...(val("NOSEED_GENRES") || [])];
+  return out.length ? `<b>Left out:</b> ${out.map(esc).join(", ")}` : "Nothing is left out yet.";
+}
+// "Movies" or "TV" after a library's name, unless the name already says it ("Movies", "TV Shows")
+const libKind = x => { const k = x.type === "show" ? "TV" : "Movies"; return (x.title || "").toLowerCase().includes(k.toLowerCase().replace(/s$/, "")) ? "" : ` <small>${k}</small>`; };
 function svcCard(id) {
   const c = SVC[id], set = !!((!c.url || val(c.url)) && val(c.key));
   const body = `${c.url ? `<div class="field"><label>URL ${srcTag(c.url)}</label>${input(c.url, "text", "http://")}${c.urlHelp ? `<div class="help">${c.urlHelp}</div>` : ""}</div>` : ""}
@@ -1207,11 +1214,13 @@ function renderSettings() {
       ${rangeField("OWNED_WEIGHT", "Titles you own, unwatched", 0, 1, 0.05,
         "How much the things you've collected but not watched yet shape your taste. Keep it high if your library is curated; lower it if it's a bit of everything.", v => Math.round(v * 100) + "%")}
       <h4>Don't learn from</h4>
-      <p class="sub">These stay in your library and still count as owned, but they stop shaping your picks.</p>
-      <div class="field"><label>Plex libraries</label><div id="noseedLibs" class="chips pick"><span class="muted">Sync once to list your libraries.</span></div></div>
-      <div class="field"><label>Genres</label><div class="chips pick">${NOSEED_GENRE_LIST.map(g =>
-        `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}</button>`).join("")}</div></div>
-      <div class="field"><label>Single titles</label><div id="noseedTitles"><span class="muted">None yet. Open any title you own and tick <b>Don't learn from this</b>.</span></div></div>
+      <p class="sub">Tick anything that shouldn't shape your picks. It stays in your library and still counts as owned.</p>
+      <p class="ns-sum" id="nsSum">${nsSummary()}</p>
+      <div class="field"><label>Libraries to leave out</label><div id="noseedLibs" class="chips pick"><span class="muted">Sync once to list your libraries.</span></div></div>
+      <div class="field"><label>Genres to leave out</label><div><div class="chips pick">${NOSEED_GENRE_LIST.map(g =>
+        `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}</button>`).join("")}</div>
+        <div class="help">Titles in any of these genres, in every library.</div></div></div>
+      <div class="field"><label>Titles left out</label><div id="noseedTitles"><span class="muted">None yet. Open any title you own and tick <b>Don't learn from this</b>.</span></div></div>
     </div>`, "Ratings count most, then what you've watched, then what you own. These settings adjust the rest.")],
     ["picks", "Picks", setSection("picks", "Picks", `<div class="scard">
       ${rangeField("MIN_VOTES", "Minimum TMDB votes: movies", 0, 2000, 25, "Skip obscure titles with fewer votes than this. Older decades need far fewer, so classics aren't cut.")}
@@ -1303,7 +1312,7 @@ async function loadNoseed() {
     const [secs, ns] = await Promise.all([api("/api/plex/sections"), api("/api/noseed")]);
     const chosen = val("NOSEED_LIBRARIES") || [];
     if (secs.sections.length) $("noseedLibs").innerHTML = secs.sections.map(x =>
-      `<button type="button" data-nsl="${esc(x.title)}" class="${chosen.includes(x.title) ? "on" : ""}">${esc(x.title)} <small>${x.type === "show" ? "TV" : "Movies"}</small></button>`).join("");
+      `<button type="button" data-nsl="${esc(x.title)}" class="${chosen.includes(x.title) ? "on" : ""}">${esc(x.title)}${libKind(x)}</button>`).join("");
     if (ns.items.length) $("noseedTitles").innerHTML = `<div class="chips">${ns.items.map(x =>
       `<span class="rm">${esc(x.title || "Untitled")}<button type="button" data-unseed="${x.key}" title="Learn from it again">×</button></span>`).join("")}</div>`;
   } catch {}
@@ -1338,7 +1347,7 @@ $("settingsBody").addEventListener("click", async e => {
   if (ng) {
     const k = ng.dataset.nsg ? "NOSEED_GENRES" : "NOSEED_LIBRARIES", v = ng.dataset.nsg || ng.dataset.nsl;
     const cur = new Set(val(k) || []); cur.has(v) ? cur.delete(v) : cur.add(v);
-    draft[k] = [...cur]; ng.classList.toggle("on", cur.has(v)); setDirty(true); return;
+    draft[k] = [...cur]; ng.classList.toggle("on", cur.has(v)); setDirty(true); $("nsSum").innerHTML = nsSummary(); return;
   }
   const un = e.target.closest("[data-unseed]");
   if (un) {

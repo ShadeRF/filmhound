@@ -442,6 +442,10 @@ svg.inl { width: 14px; height: 14px; vertical-align: -2px; stroke: currentColor;
 .chips.pick button { cursor: pointer; background: var(--card, #1d1a17); border: 1px solid var(--line, #2a2622); color: inherit; border-radius: 999px; padding: 5px 12px; font-size: 13px; }
 .chips.pick button.on { background: rgba(232, 176, 75, .16); border-color: var(--accent, #e8b04b); color: var(--accent, #e8b04b); }
 .chips.pick small { color: var(--dim, #9a9187); }
+.chips.pick button::before { content: ""; display: inline-block; width: 11px; height: 11px; border: 1.5px solid var(--dim); border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+.chips.pick button.on::before { content: "✓"; background: var(--accent); border-color: var(--accent); color: #1a1408; font-size: 10px; line-height: 11px; text-align: center; font-weight: 700; }
+.ns-sum { font-size: 13px; margin: -6px 0 12px; color: var(--dim); }
+.ns-sum b { color: var(--text); font-weight: 600; }
 .chips .rm { display: inline-flex; align-items: center; gap: 4px; }
 .chips .rm button { background: none; border: 0; color: var(--dim, #9a9187); cursor: pointer; font-size: 15px; padding: 0 2px; }
 .chips .rm button:hover { color: #ff6b6b; }

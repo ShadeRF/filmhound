@@ -471,3 +471,17 @@ def test_phone_header_tucks_away_while_scrolling_down(browser, site):
         assert not errors, errors
     finally:
         ctx.close()
+
+
+def test_dont_learn_from_is_clearly_a_set_of_tick_boxes(page):
+    go(page, "settings")
+    sec = page.locator("#set-taste")
+    for label in ("Libraries to leave out", "Genres to leave out", "Titles left out"):
+        assert label in sec.inner_text(), label
+    assert page.locator("#nsSum").inner_text() == "Nothing is left out yet."
+    page.click("[data-nsg=Horror]")
+    assert page.locator("#nsSum").inner_text() == "Left out: Horror"
+    tick = page.evaluate("getComputedStyle(document.querySelector('[data-nsg=Horror]'), '::before').content")
+    assert "✓" in tick   # a ticked chip shows a tick
+    page.click("[data-nsg=Horror]")
+    assert page.locator("#nsSum").inner_text() == "Nothing is left out yet."

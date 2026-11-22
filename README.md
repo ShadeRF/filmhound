@@ -24,6 +24,10 @@ Sibling app for music: [Recordhound](https://github.com/ShadeRF/recordhound).
     <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-rate.jpg" alt="The Rate page: rate what you've watched, one title at a time"><br><sub>Rate what you've watched; ratings on titles in Plex are saved to Plex.</sub></td>
     <td width="50%" align="center"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-phone.jpg" width="45%" alt="For You on a phone"><br><sub>Works on your phone.</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-up-next.jpg" alt="Up next › Collections: films missing from collections, directors and actors you collect"><br><sub>Up next: films missing from collections, directors and actors you collect, nearly finished ones first.</sub></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-coming-soon.jpg" alt="Coming soon: unreleased movies that fit your taste"><br><sub>Coming soon: unreleased movies and shows that fit your taste.</sub></td>
+  </tr>
 </table>
 
 <sub>Screenshots show a demo library.</sub>
@@ -68,7 +72,7 @@ The container runs as `99:100` by default (`PUID`, `PGID`, `UMASK` change that).
 |---|---|
 | `:latest` | Stable releases. Recommended. |
 | `:nightly` | Built each night from the newest code, when there's anything new. New features first, and occasionally a bug. |
-| `:0.10.0` or `:0.10` | One exact release (or the newest fix in that line). Use it to stay put or to roll back if a release causes trouble. |
+| `:0.11.0` or `:0.11` | One exact release (or the newest fix in that line). Use it to stay put or to roll back if a release causes trouble. |
 | `:edge` | Test builds, published whenever a change is being tried out, sometimes several times a day. Expect rough edges; only use it if you're helping test. |
 
 Your settings and data carry over when you switch, so you can move between them any time.
@@ -81,19 +85,19 @@ Your settings and data carry over when you switch, so you can move between them 
 
 ## What's in it
 
-- **For You:** *Top picks*, *Because you watched…*, *Because you have…*, themed rows (*More neo-noir*, a director you return to), *Streaming on your services*, *Already in your library, not watched yet*, *Finish what you started* (missing films from collections and directors you own), *Coming soon for you* (unreleased movies and shows that fit your taste), *Hidden gems*, *Recent releases* and *Classics*. Movies and TV each get their own.
+- **For You:** *Top picks*, *Because you watched…*, *Because you have…*, themed rows (*More neo-noir*, a director you return to), *Streaming on your services*, *Already in your library, not watched yet*, *Finish what you started* (missing films from collections you own, and from directors and actors you collect), *Coming soon for you* (unreleased movies and shows that fit your taste), *Hidden gems*, *Recent releases* and *Classics*. Movies and TV each get their own.
 - **All Picks:** every scored pick with filters for genres (in or out), years, rating, runtime, language, network and your streaming services. It keeps scoring deeper as you scroll.
-- **Up next:** *Collections* (films missing from collections and directors you own) and *Coming soon* (unreleased movies and shows that fit your taste).
-- **Your Library:** what you own but haven't watched, ranked by your taste. One click sends the top 50 to a Plex collection.
+- **Up next:** *Collections* and *Coming soon*. *Collections* is *Finish what you started*: films missing from collections you own, from directors you collect, and from actors you collect (top-billed in five or more of your films; you see their other leading roles). Movies only. Groups missing five or fewer sit side by side under *Almost complete*, the rest under *More to find*, and each says how many you've already requested or marked not interested. *Coming soon* lists unreleased movies and shows that fit your taste.
+- **Your Library:** what you own but haven't watched, ranked by your taste. **Make Plex collection** sends the top ones to Plex; pick how many with *Collection size*.
 - **Watchlist:** titles you've saved, with what you already own filtered out on the home page.
-- **Rate:** rate what you've watched, one title at a time (keys 1–5; hold Shift for a half star, so Shift+4 is 3½). Ratings on titles in Plex are saved to Plex.
+- **Rate:** rate what you've watched, one title at a time (tap the stars, or press 1–5; hold Shift for a half star, so Shift+4 is 3½). Ratings on titles in Plex are saved to Plex. *Seen any of your picks?* goes through your picks instead; press K for **Seen it** without a rating.
 - **History:** what you've seen and rated, hidden, requested in Seerr or added to Radarr and Sonarr. Restore anything from here.
-- **Title pages:** trailer, where to stream (JustWatch data via TMDB), IMDb and TMDB ratings, cast and crew with photos, and why it was picked. Add to Radarr or Sonarr, request through Seerr (which respects your Seerr blocklist), save to your watchlist, mark seen, hide, or open *More like this*.
+- **Title pages:** trailer, where to stream (JustWatch data via TMDB), IMDb and TMDB ratings, cast and crew with photos, and why it was picked. Add to Radarr or Sonarr, request through Seerr (which respects your Seerr blocklist), save to your watchlist, mark **Seen it**, hide, or open *More like this*.
 - **People:** any actor or director's work, with options to hide what you own or have seen.
 - **Search** for any movie, show or person.
 - **Watch history from elsewhere:** Letterboxd and Trakt, and their ratings can optionally be copied into Plex. For Letterboxd, upload your export once (letterboxd.com → Settings → Data → Export your data) for your full history; after that, your diary feed is read on every sync. The feed alone only has your latest ~50 entries.
-- **Don't learn from:** keep kids' movies, someone else's shows, whole libraries (set them to *Own only* on the Plex card) or any genre in your library without them shaping your picks.
-- **Settings page** for every connection, with a **Test** button for each, and optional sign-in.
+- **Don't learn from:** keep kids' movies, someone else's shows or any genre in your library (*More genres…* lists them all) from shaping your picks. Each Plex library is *Use*, *Own only* (counts as yours, doesn't shape your picks) or *Ignore*, on the Plex card in Settings or during setup.
+- **Settings page** for every connection, with a **Test connection** button for each, and optional sign-in. Saved keys show only their last four characters, and an eye button lets you check what you type. **Reset all feedback** clears the History page in one go.
 
 ## How it picks
 
@@ -126,6 +130,7 @@ Turn on sign-in in Settings before reaching it from outside your home.
 
 - Rating things is the biggest lever. The **Rate** page makes it quick.
 - Too many obscure picks? Raise *Minimum TMDB votes*. Too mainstream? Lower it and sort by *Deep cuts*.
+- *Picks to keep* in Settings → Picks can be set to **All**, to keep every pick that scores.
 - Every setting can also come from an environment variable with the same name (`PLEX_URL`, `TMDB_API_KEY`…). Anything saved on the Settings page wins.
 - Delete `filmhound.db` and `settings.json` in your data folder to start fresh.
 

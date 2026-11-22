@@ -1042,7 +1042,7 @@ async function loadGaps() {
   listShell("Finish what you started", "Films missing from collections you own, and from directors and actors you collect (their leading roles). Movies only.",
     gapSections(d.groups, g => g.items.length, (g, few) => `<div class="gap${few ? " few" : ""}" style="--n:${g.items.length}">
       <div class="gap-head">${g.type !== "collection" ? `<a href="#/person/${g.id}" class="gap-ph" ${g.profile ? `style="background-image:url(${IMG}w185${g.profile})"` : ""}></a>` : g.poster_path ? `<span class="gap-ph" style="background-image:url(${IMG}w185${g.poster_path})"></span>` : ""}
-        <div><h3>${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
+        <div><h3 title="${esc(g.name)}">${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
         <div class="muted">${g.type === "director" ? "Director · " : g.type === "actor" ? "Actor · " : ""}You have ${g.owned} of ${g.total}${g.type === "actor" ? " leading roles" : ""}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
       <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`), tools);

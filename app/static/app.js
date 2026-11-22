@@ -1068,9 +1068,43 @@ async function loadSettings() {
 }
 function setDirty(d) { dirty = d; $("savebar").classList.toggle("on", d); }
 function confirmLeave() { return window.confirm("Discard unsaved settings changes?") && (setDirty(false), draft = {}, true); }
+// Saved keys never reach the browser: the server sends eight dots plus the key's last four characters. That
+// placeholder is shown as plain text, so you can tell which key is saved. The eye button only reveals what you type.
+const isMasked = v => typeof v === "string" && v.startsWith("••••");
+const isSecret = (k, v) => /TOKEN|KEY|CLIENT_ID/.test(k) || isMasked(v);
+const EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
+function secretInput(attr, k, v, ph) {
+  const m = isMasked(v);
+  return `<span class="secret"><input type="${m ? "text" : "password"}" ${attr}="${k}" data-secret value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">` +
+    `<button type="button" class="eye" data-eye aria-label="Show what you typed" title="Show what you typed" aria-pressed="false" ${m || !v ? "hidden" : ""}>${EYE}</button></span>` +
+    `<div class="help saved-note" ${m ? "" : "hidden"}>Saved. For safety the full key is never shown here; paste a new one to replace it.</div>`;
+}
+document.addEventListener("focusin", e => {   // typing into a saved key replaces it
+  if (e.target.matches && e.target.matches("[data-secret]") && isMasked(e.target.value)) e.target.select();
+});
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (!el.matches || !el.matches("[data-secret]")) return;
+  const eye = el.nextElementSibling, note = el.parentElement.nextElementSibling, m = isMasked(el.value);
+  if (!m && eye.getAttribute("aria-pressed") !== "true") el.type = "password";   // what you type stays hidden until you ask
+  if (m) el.type = "text";
+  eye.hidden = m || !el.value;
+  if (note && note.classList.contains("saved-note")) note.hidden = !m;
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-eye]");
+  if (!b) return;
+  const el = b.previousElementSibling, show = el.type === "password";
+  el.type = show ? "text" : "password";
+  b.setAttribute("aria-pressed", String(show));
+  b.title = show ? "Hide" : "Show what you typed";
+  b.setAttribute("aria-label", b.title);
+  el.focus();
+});
 function input(k, type = "text", ph = "") {
-  const secret = /TOKEN|KEY/.test(k);
-  return `<input type="${secret ? "password" : type}" data-k="${k}" value="${esc(val(k))}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">`;
+  const v = val(k);
+  if (isSecret(k, v)) return secretInput("data-k", k, v, ph);
+  return `<input type="${type}" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">`;
 }
 function svcCard(id) {
   const c = SVC[id], set = !!((!c.url || val(c.url)) && val(c.key));
@@ -1244,10 +1278,6 @@ $("settingsBody").addEventListener("input", e => {
     draft.PLEX_LIBRARIES = on.length === boxes.length ? [] : on;
     setDirty(true);
   }
-});
-$("settingsBody").addEventListener("focusin", e => {   // typing into a masked secret replaces it
-  const el = e.target;
-  if (el.dataset.k && /TOKEN|KEY/.test(el.dataset.k) && el.value.startsWith("••••")) el.select();
 });
 $("settingsBody").addEventListener("click", async e => {
   const t = e.target.closest("[data-test]");
@@ -1505,8 +1535,8 @@ function focusPendingCard() {
   setTimeout(() => window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - headerOffset(), behavior: "smooth" }), 50);
 }
 function wzField(k, label, help, ph = "") {
-  const secret = /TOKEN|KEY/.test(k);
-  return `<div class="field"><label>${label}</label><input type="${secret ? "password" : "text"}" data-wz-k="${k}" value="${esc(wzVal(k))}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">
+  const v = wzVal(k);
+  return `<div class="field"><label>${label}</label>${isSecret(k, v) ? secretInput("data-wz-k", k, v, ph) : `<input type="text" data-wz-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false">`}
     ${help ? `<div class="help">${help}</div>` : ""}</div>`;
 }
 function renderSetup() {

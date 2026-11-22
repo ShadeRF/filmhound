@@ -668,17 +668,23 @@ def test_actors_whose_leading_roles_you_collect():
     class PeopleTMDB(FakeTMDB):
         def _get(self, path, **params):
             if path == f"/person/{pid}":
-                film = lambda i, order, votes: {"id": i, "title": f"Film {i}", "release_date": "2001-01-01", "media_type": "movie",
-                                                "order": order, "vote_count": votes, "poster_path": "/p.jpg"}
+                film = lambda i, order, votes, **x: {"id": i, "title": f"Film {i}", "release_date": "1951-01-01", "media_type": "movie",
+                                                     "order": order, "vote_count": votes, "poster_path": "/p.jpg", "character": "Flint", **x}
                 return {"id": pid, "name": "Lead Actor", "profile_path": "/face.jpg", "combined_credits": {"crew": [], "cast": [
                     film(5001, 0, 4000), film(5002, 1, 9000),   # leading roles you don't own
+                    film(5005, 4, 12),                         # a classic few people have rated: still a main role
                     film(5003, 8, 9000),                       # a small part: left out
-                    film(5004, 0, 10)]}}                       # barely known: left out
+                    film(5004, 0, 2),                          # almost nobody has logged it: left out
+                    film(5006, 0, 300, character="Self (archive footage)"),   # an appearance, not a role
+                    film(5007, 1, 300, genre_ids=[99]),        # a documentary
+                    film(5008, 0, 300, genre_ids=[10770]),     # a TV movie
+                    film(5009, 0, 300, character="Himself")]}}
             return super()._get(path, **params)
     for p in (pid,):
         db.set_meta(f"person_{p}", None)
     extras.build_gaps(PeopleTMDB())
     g = next(g for g in db.get_meta("gaps")["groups"] if g["type"] == "actor" and g["id"] == pid)
-    assert [i["tmdb_id"] for i in g["items"]] == [5002, 5001]   # best known first
-    assert g["owned"] == leads[pid] and g["total"] == leads[pid] + 2 and g["profile"]
+    assert [i["tmdb_id"] for i in g["items"]] == [5002, 5001, 5005]   # best known first
+    top5 = Counter(x["id"] for d in (v[0] for v in db.tmdb_get_many(list(owned)).values()) for x in (d.get("cast") or [])[:5])
+    assert g["owned"] == top5[pid] and g["total"] == top5[pid] + 3 and g["profile"]
     db.set_meta(f"person_{pid}", None)

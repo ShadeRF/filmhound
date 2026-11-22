@@ -1,5 +1,6 @@
 """Collection gaps, coming soon for you, search, and "more like this"."""
 import logging
+import re
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -64,6 +65,21 @@ def _safe(fn, a):
 
 # ------------------------------------------------------------------ collection gaps
 
+# "Self", "Himself", "(archive footage)", "(uncredited)": an appearance, not a role
+_NOT_A_ROLE = re.compile(r"\b(self|himself|herself|themselves|archive|archival|uncredited|narrator|host|presenter)\b", re.I)
+DOCUMENTARY, TV_MOVIE = 99, 10770
+
+
+def _main_role(m):
+    """A feature film where they're one of the first five billed: not a documentary, a TV movie, a short of
+    newsreel clips, an appearance as themselves or in archive footage, or something almost nobody has logged."""
+    return (m.get("media_type") == "movie" and m.get("release_date") and not m.get("video")
+            and m.get("order") is not None and m["order"] < 5
+            and not _NOT_A_ROLE.search(m.get("character") or "")
+            and not {DOCUMENTARY, TV_MOVIE} & set(m.get("genre_ids") or [])
+            and (m.get("vote_count") or 0) >= 5)
+
+
 def build_gaps(tmdb=None, step=lambda *a: None):
     """Movies missing from franchises/collections you own, from directors you collect, and from actors whose
     leading roles you collect."""
@@ -110,10 +126,12 @@ def build_gaps(tmdb=None, step=lambda *a: None):
                 names[x["id"]] = (x["name"], x.get("profile"))
     top = [pid for pid, n in directors.most_common(40) if n >= 3]
     # actors you collect: 5+ films of yours where they're among the top three billed (a lead, not a cameo)
-    actors = Counter()
+    actors, billed = Counter(), Counter()   # top three (who you collect) / top five (counted like the missing ones)
     for d in det.values():
-        for x in (d.get("cast") or [])[:3]:
-            actors[x["id"]] += 1
+        for i, x in enumerate((d.get("cast") or [])[:5]):
+            billed[x["id"]] += 1
+            if i < 3:
+                actors[x["id"]] += 1
             names.setdefault(x["id"], (x["name"], x.get("profile")))
     top_actors = [pid for pid, n in actors.most_common(30) if n >= 5 and pid not in directors]
     step("Checking directors and actors you collect", f"{len(top)} directors, {len(top_actors)} actors")
@@ -140,14 +158,12 @@ def build_gaps(tmdb=None, step=lambda *a: None):
                            "owned": directors[pid], "total": directors[pid] + len(missing), "items": missing})
     for pid in top_actors:
         p = people.get(pid) or {}
-        lead = {m["id"]: m for m in (p.get("combined_credits") or {}).get("cast", [])
-                if m.get("media_type") == "movie" and (m.get("order") is not None and m["order"] < 3) and m.get("release_date")
-                and (m.get("vote_count") or 0) >= 50}
+        lead = {m["id"]: m for m in (p.get("combined_credits") or {}).get("cast", []) if _main_role(m)}
         missing = [_item(m, "movie", upcoming=m["release_date"] > today) for m in lead.values() if m["id"] not in owned]
         if missing:   # their best-known leading roles first
             missing.sort(key=lambda x: -(x.get("tmdb_votes") or 0))
             groups.append({"type": "actor", "id": pid, "name": names[pid][0], "profile": names[pid][1] or p.get("profile_path"),
-                           "owned": actors[pid], "total": actors[pid] + len(missing), "items": missing[:12]})
+                           "owned": billed[pid], "total": billed[pid] + len(missing), "items": missing[:30]})
     groups.sort(key=lambda g: (-g["owned"] / g["total"], -g["owned"]))
     db.set_meta("gaps", {"_at": time.time(), "groups": groups, "actors": True})   # actors: built by a version that looks for them
     return len(groups)

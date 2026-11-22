@@ -11,11 +11,11 @@ Self-hosted movie and TV recommendations built from **your** Plex library and wa
 Browse picks, see why each one was picked, and send what you want to Radarr, Sonarr or Seerr.
 Nothing is ever requested automatically.
 
-Sibling app for music: [Recordhound](https://github.com/ShadeRF/unraid-templates/blob/main/docs/recordhound.md).
+Sibling app for music: [Recordhound](https://github.com/ShadeRF/recordhound).
 
 ## Install
 
-**Unraid:** search for **Filmhound** in Community Apps. Full guide: [docs/filmhound.md](https://github.com/ShadeRF/unraid-templates/blob/main/docs/filmhound.md).
+**Unraid:** search for **Filmhound** in Community Apps. Setup is covered in [the Unraid guide](https://github.com/ShadeRF/unraid-templates/blob/main/docs/filmhound.md).
 
 **Docker anywhere else:**
 

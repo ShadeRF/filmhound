@@ -236,6 +236,16 @@ def tmdb_brief(ids):
     return out
 
 
+def owned_genres():
+    """[{name, count}] for every TMDB genre on titles you own (movies and shows together), most common first."""
+    def read():
+        q = ("SELECT json_extract(g.value, '$.name') AS name, COUNT(DISTINCT l.tmdb_id) AS n"
+             " FROM library l JOIN tmdb t ON t.tmdb_id = l.tmdb_id, json_each(t.json, '$.genres') g"
+             " WHERE json_valid(t.json) GROUP BY name HAVING name IS NOT NULL AND name != '' ORDER BY n DESC, name")
+        return [{"name": r["name"], "count": r["n"]} for r in conn().execute(q)]
+    return list(cached("owned_genres", read))
+
+
 def tmdb_put(tmdb_id, data):
     conn().execute(
         "INSERT OR REPLACE INTO tmdb(tmdb_id, json, fetched_at) VALUES (?, ?, ?)",

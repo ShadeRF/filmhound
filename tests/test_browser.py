@@ -236,9 +236,15 @@ def _rate_presses(page):
     assert FakePlexAPI.rated[-1][1] == 5 and title() != second
 
 
-def test_setup_walkthrough_keeps_every_library_ticked(page, site):
+def lib_modes(page, attr):
+    """{library: chosen mode} as the Use / Own only / Ignore buttons show it."""
+    return page.evaluate(f"""Object.fromEntries([...document.querySelectorAll('[{attr}].on')]
+        .map(b => [b.getAttribute('{attr}'), b.dataset.mode]))""")
+
+
+def test_setup_walkthrough_libraries_use_own_only_or_ignore(page, site):
     config = site["config"]
-    keep = config.PLEX_URL, config.PLEX_TOKEN
+    keep = {k: getattr(config, k) for k in ("PLEX_URL", "PLEX_TOKEN", "PLEX_LIBRARIES", "NOSEED_LIBRARIES")}
     config.PLEX_URL, config.PLEX_TOKEN = "", ""     # a new install
     try:
         page.goto(page.base)
@@ -249,20 +255,21 @@ def test_setup_walkthrough_keeps_every_library_ticked(page, site):
         page.locator('[data-wz-k="PLEX_TOKEN"]').fill("test-token")
         page.locator('[data-wz="test"]').click()
         settle(page)
-        boxes = page.locator("[data-wz-lib]")
-        assert boxes.count() == 3 and all(boxes.nth(i).is_checked() for i in range(3))
-        boxes.nth(1).uncheck()
-        boxes.nth(1).check()                        # all ticked again means "every library"
-        page.locator('[data-wz="test"]').click()    # anything that redraws the step
+        assert lib_modes(page, "data-wz-lib") == {"Movies": "use", "TV Shows": "use", "Kids": "use"}, "every library starts on Use"
+        rows = page.locator(".wz-libs .librow")
+        assert rows.count() == 3 and rows.nth(2).locator(".libname").inner_text().strip() == "Kids Movies"
+        assert rows.nth(0).locator(".libname").inner_text().strip() == "Movies", "the name already says Movies"
+        assert "Own only counts as yours" in page.locator(".wz-libs").inner_text()
+        page.click('[data-wz-lib="Kids"][data-mode=own]')
+        page.click('[data-wz-lib="TV Shows"][data-mode=ignore]')
+        page.locator('[data-wz="test"]').click()    # anything that redraws the step keeps the choices
         settle(page)
-        boxes = page.locator("[data-wz-lib]")
-        assert all(boxes.nth(i).is_checked() for i in range(3)), "boxes show unticked though every library will be read"
-        boxes.nth(2).uncheck()
-        page.locator('[data-wz="test"]').click()
-        settle(page)
-        assert [page.locator("[data-wz-lib]").nth(i).is_checked() for i in range(3)] == [True, True, False]
+        assert lib_modes(page, "data-wz-lib") == {"Movies": "use", "TV Shows": "ignore", "Kids": "own"}
+        # what the walkthrough saves with the TMDB step
+        assert page.evaluate("[wz.vals.PLEX_LIBRARIES, wz.vals.NOSEED_LIBRARIES]") == [["Movies", "Kids"], ["Kids"]]
     finally:
-        config.PLEX_URL, config.PLEX_TOKEN = keep
+        for k, v in keep.items():
+            setattr(config, k, v)
 
 
 def test_phone_layout(browser, site):
@@ -417,7 +424,7 @@ def test_empty_watchlist_never_says_hover(page):
     assert "hover" not in view(page).inner_text().lower()
 
 
-def test_setup_library_chips_line_up_with_the_fields(page, site):
+def test_setup_library_rows_line_up_with_the_fields(page, site):
     config = site["config"]
     keep = config.PLEX_URL, config.PLEX_TOKEN
     config.PLEX_URL, config.PLEX_TOKEN = "", ""
@@ -429,8 +436,8 @@ def test_setup_library_chips_line_up_with_the_fields(page, site):
         page.locator('[data-wz-k="PLEX_TOKEN"]').fill("test-token")
         page.locator('[data-wz="test"]').click()
         settle(page)
-        chips, url = page.locator(".wz-libs").bounding_box(), page.locator('[data-wz-k="PLEX_URL"]').bounding_box()
-        assert abs(chips["x"] - url["x"]) < 4, "the library chips are indented past the fields"
+        rows, url = page.locator(".wz-libs .librows").bounding_box(), page.locator('[data-wz-k="PLEX_URL"]').bounding_box()
+        assert abs(rows["x"] - url["x"]) < 4, "the library rows are indented past the fields"
     finally:
         config.PLEX_URL, config.PLEX_TOKEN = keep
 
@@ -473,15 +480,183 @@ def test_phone_header_tucks_away_while_scrolling_down(browser, site):
         ctx.close()
 
 
-def test_dont_learn_from_is_clearly_a_set_of_tick_boxes(page):
+def test_dont_learn_from_says_what_is_left_out(page):
     go(page, "settings")
     sec = page.locator("#set-taste")
-    for label in ("Libraries to leave out", "Genres to leave out", "Titles left out"):
+    for label in ("Genres to leave out", "Titles left out"):
         assert label in sec.inner_text(), label
+    assert "Libraries to leave out" not in sec.inner_text(), "libraries are chosen on the Plex card now"
     assert page.locator("#nsSum").inner_text() == "Nothing is left out yet."
     page.click("[data-nsg=Horror]")
     assert page.locator("#nsSum").inner_text() == "Left out: Horror"
-    tick = page.evaluate("getComputedStyle(document.querySelector('[data-nsg=Horror]'), '::before').content")
-    assert "✓" in tick   # a ticked chip shows a tick
+    assert "on" in page.get_attribute("[data-nsg=Horror]", "class")   # the chosen chip is highlighted
     page.click("[data-nsg=Horror]")
     assert page.locator("#nsSum").inner_text() == "Nothing is left out yet."
+
+
+def test_plex_card_saves_use_own_only_and_ignore(page, site):
+    config = site["config"]
+    keep = {k: getattr(config, k) for k in ("PLEX_LIBRARIES", "NOSEED_LIBRARIES")}
+    def plex_open():
+        page.evaluate("document.getElementById('svc-plex').open = true")
+        page.wait_for_selector("#plexLibs .librow")
+    try:
+        go(page, "settings")
+        plex_open()
+        assert lib_modes(page, "data-lib") == {"Movies": "use", "TV Shows": "use", "Kids": "use"}
+        help_ = page.locator("#plexLibs .help").inner_text()
+        assert help_ == ("Use shapes your picks. Own only counts as yours, so nothing in it is suggested to you, but it doesn't "
+                         "shape your picks: good for a kids' library or someone else's shows. Ignore isn't read at all.")
+
+        def save():
+            page.click("#saveBtn")
+            settle(page)
+            return page.locator("#toast").inner_text()
+        # Own only: still read, left out of your taste, named in the summary
+        page.click('[data-lib="Kids"][data-mode=own]')
+        assert page.locator("#savebar").evaluate("el => el.classList.contains('on')"), "the change didn't mark Settings unsaved"
+        assert page.locator("#nsSum").inner_text() == "Left out: the Kids library (own only)"
+        assert "Sync now to apply" in save()
+        assert config.PLEX_LIBRARIES == [] and config.NOSEED_LIBRARIES == ["Kids"]
+        # Ignore: not read, and no longer own only
+        plex_open()
+        page.click('[data-lib="Kids"][data-mode=ignore]')
+        assert page.locator("#nsSum").inner_text() == "Nothing is left out yet."
+        assert "Sync now to apply" in save()
+        assert config.PLEX_LIBRARIES == ["Movies", "TV Shows"] and config.NOSEED_LIBRARIES == []
+        # the last library can't be ignored: nothing would be read
+        plex_open()
+        page.click('[data-lib="Movies"][data-mode=ignore]')
+        page.click('[data-lib="TV Shows"][data-mode=ignore]')
+        assert "at least one library" in page.locator("#toast").inner_text()
+        assert lib_modes(page, "data-lib") == {"Movies": "ignore", "TV Shows": "use", "Kids": "ignore"}
+        page.click("#discard")
+        # Use again for everything: an empty list means every library
+        plex_open()
+        page.click('[data-lib="Kids"][data-mode=use]')
+        save()
+        assert config.PLEX_LIBRARIES == [] and config.NOSEED_LIBRARIES == []
+        # older setups carry over: unticked libraries show as Ignore, left-out ones as Own only
+        config.save({"PLEX_LIBRARIES": ["movies", "Kids"], "NOSEED_LIBRARIES": ["kids"]})
+        page.reload()
+        settle(page)
+        plex_open()
+        assert lib_modes(page, "data-lib") == {"Movies": "use", "TV Shows": "ignore", "Kids": "own"}
+        assert page.locator("#nsSum").inner_text() == "Left out: the Kids library (own only)"
+    finally:
+        config.save(keep)
+
+
+def test_plex_card_library_rows_on_a_phone(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    ctx.route("**/*", lambda r: r.continue_() if r.request.url.startswith(site["base"]) else r.abort())
+    p = ctx.new_page()
+    try:
+        p.goto(site["base"] + "#/settings")
+        p.wait_for_load_state("networkidle")
+        p.evaluate("document.getElementById('svc-plex').open = true")
+        p.wait_for_selector("#plexLibs .librow")
+        row = p.locator("#plexLibs .librow").nth(2)
+        name, seg = row.locator(".libname").bounding_box(), row.locator(".seg").bounding_box()
+        assert seg["y"] >= name["y"] + name["height"] - 1, "the buttons should sit under the name on a phone"
+        assert seg["x"] + seg["width"] <= 390 and p.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    finally:
+        ctx.close()
+
+
+def test_more_genres_lists_every_genre_you_own(page):
+    go(page, "settings")
+    page.wait_for_selector("[data-nsg-more]")
+    assert page.locator("[data-nsg-more]").inner_text() == "More genres…"
+    assert page.locator(".nsg-all").count() == 0
+    page.click("[data-nsg-more]")
+    chips = page.locator(".nsg-all [data-nsg]")
+    assert [chips.nth(i).inner_text().split()[0] for i in range(chips.count())] == ["Crime", "Comedy"], "most common first"
+    assert page.locator(".nsg-all [data-nsg=Comedy] small").inner_text() == "2"
+    assert "Comedy" not in page.locator("#nsgQuick").inner_text()
+    page.click(".nsg-all [data-nsg=Comedy]")
+    assert "on" in page.get_attribute(".nsg-all [data-nsg=Comedy]", "class")
+    assert page.locator("#nsSum").inner_text() == "Left out: Comedy"
+    assert page.locator("#savebar").evaluate("el => el.classList.contains('on')")
+    assert page.locator("[data-nsg-more]").inner_text() == "Fewer genres"
+    page.click("[data-nsg-more]")
+    assert page.locator(".nsg-all").count() == 0
+    quick = page.locator("#nsgQuick [data-nsg=Comedy]")
+    assert quick.count() == 1 and "on" in quick.get_attribute("class"), "a chosen genre is hidden when the list is folded"
+    page.click("#discard")
+    assert page.locator("#nsgQuick [data-nsg=Comedy]").count() == 0
+
+
+def test_more_genres_before_the_first_sync(page):
+    page.route("**/api/noseed/genres", lambda r: r.fulfill(json={"genres": []}))
+    go(page, "settings")
+    page.wait_for_selector(".nsg-none")
+    assert page.locator(".nsg-none").inner_text() == "Sync once to list your genres."
+    assert page.locator("[data-nsg-more]").count() == 0
+
+
+def test_up_next_tab_switches_between_collections_and_coming_soon(page):
+    go(page, "home")
+    tabs = page.evaluate("[...document.querySelectorAll('#nav button')].map(b => b.textContent)")
+    assert tabs == ["For You", "All Picks", "Up next", "Your Library", "Watchlist", "Rate", "History"]
+    assert page.locator("#subnav").is_hidden()
+    page.click('#nav [data-view="next"]')
+    settle(page)
+    assert page.evaluate("location.hash") == "#/gaps", "Up next opens Collections first"
+    tab = page.locator('#nav [data-view="next"]')
+    switch = page.locator("#subnav")
+    assert "on" in tab.get_attribute("class") and switch.is_visible()
+    assert switch.locator("button").all_inner_texts() == ["Collections", "Coming soon"]
+    assert switch.locator("button.on").inner_text() == "Collections"
+    assert page.locator("#listBody h1, #listBody h2").first.inner_text() == "Finish what you started"
+    where = switch.bounding_box()
+    switch.locator("button", has_text="Coming soon").click()
+    settle(page)
+    assert page.evaluate("location.hash") == "#/upcoming"
+    assert "on" in tab.get_attribute("class") and switch.locator("button.on").inner_text() == "Coming soon"
+    assert page.locator("#listBody h1, #listBody h2").first.inner_text() == "Coming soon for you"
+    assert switch.bounding_box() == where, "the switch row moved between the two pages"
+    switch.locator("button", has_text="Collections").click()
+    settle(page)
+    assert page.evaluate("location.hash") == "#/gaps" and switch.bounding_box() == where
+    # old addresses still work, and #/next opens the first page
+    for addr, on in (("upcoming", "Coming soon"), ("gaps", "Collections"), ("next", "Collections")):
+        go(page, "home")
+        go(page, addr)
+        assert "on" in tab.get_attribute("class") and switch.locator("button.on").inner_text() == on, addr
+    go(page, "picks")
+    assert switch.is_hidden() and "on" not in (tab.get_attribute("class") or "")
+
+
+def test_up_next_switch_on_a_phone(browser, site):
+    ctx = browser.new_context(viewport={"width": 390, "height": 800}, is_mobile=True, has_touch=True)
+    ctx.route("**/*", lambda r: r.continue_() if r.request.url.startswith(site["base"]) else r.abort())
+    p = ctx.new_page()
+    errors = []
+    p.on("pageerror", lambda e: errors.append(str(e)))
+    try:
+        p.goto(site["base"] + "#/upcoming")
+        p.wait_for_load_state("networkidle")
+        p.wait_for_timeout(200)
+        sw = p.locator("#subnav")
+        assert sw.is_visible() and p.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        # too narrow for its buttons: it scrolls sideways and fades its right edge, like the filter bar
+        p.evaluate("const s = document.getElementById('subnav'); s.style.width = '150px'; dispatchEvent(new Event('resize'))")
+        p.wait_for_timeout(100)
+        assert p.evaluate("document.getElementById('subnav').classList.contains('fade-right')")
+        p.evaluate("document.getElementById('subnav').scrollLeft = 99999")
+        p.wait_for_timeout(100)
+        assert not p.evaluate("document.getElementById('subnav').classList.contains('fade-right')")
+        p.evaluate("document.getElementById('subnav').style.width = ''")
+        # it tucks away with the tabs while scrolling down, and comes back scrolling up
+        p.evaluate("document.querySelector('main').style.minHeight = '4000px'")
+        for _ in range(4):
+            p.mouse.wheel(0, 300)
+            p.wait_for_timeout(150)
+        assert p.locator("#nav").is_hidden() and sw.is_hidden()
+        p.mouse.wheel(0, -200)
+        p.wait_for_timeout(150)
+        assert p.locator("#nav").is_visible() and sw.is_visible()
+        assert not errors, errors
+    finally:
+        ctx.close()

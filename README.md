@@ -83,6 +83,7 @@ Your settings and data carry over when you switch, so you can move between them 
 
 - **For You:** *Top picks*, *Because you watched…*, *Because you have…*, themed rows (*More neo-noir*, a director you return to), *Streaming on your services*, *Already in your library, not watched yet*, *Finish what you started* (missing films from collections and directors you own), *Coming soon for you* (unreleased movies and shows that fit your taste), *Hidden gems*, *Recent releases* and *Classics*. Movies and TV each get their own.
 - **All Picks:** every scored pick with filters for genres (in or out), years, rating, runtime, language, network and your streaming services. It keeps scoring deeper as you scroll.
+- **Up next:** *Collections* (films missing from collections and directors you own) and *Coming soon* (unreleased movies and shows that fit your taste).
 - **Your Library:** what you own but haven't watched, ranked by your taste. One click sends the top 50 to a Plex collection.
 - **Watchlist:** titles you've saved, with what you already own filtered out on the home page.
 - **Rate:** rate what you've watched, one title at a time (keys 1–5; hold Shift for a half star, so Shift+4 is 3½). Ratings on titles in Plex are saved to Plex.
@@ -91,7 +92,7 @@ Your settings and data carry over when you switch, so you can move between them 
 - **People:** any actor or director's work, with options to hide what you own or have seen.
 - **Search** for any movie, show or person.
 - **Watch history from elsewhere:** Letterboxd and Trakt, and their ratings can optionally be copied into Plex. For Letterboxd, upload your export once (letterboxd.com → Settings → Data → Export your data) for your full history; after that, your diary feed is read on every sync. The feed alone only has your latest ~50 entries.
-- **Don't learn from:** keep kids' movies, someone else's shows, whole libraries or genres in Plex without them shaping your picks.
+- **Don't learn from:** keep kids' movies, someone else's shows, whole libraries (set them to *Own only* on the Plex card) or any genre in your library without them shaping your picks.
 - **Settings page** for every connection, with a **Test** button for each, and optional sign-in.
 
 ## How it picks

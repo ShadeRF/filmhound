@@ -442,8 +442,6 @@ svg.inl { width: 14px; height: 14px; vertical-align: -2px; stroke: currentColor;
 .chips.pick button { cursor: pointer; background: var(--card, #1d1a17); border: 1px solid var(--line, #2a2622); color: inherit; border-radius: 999px; padding: 5px 12px; font-size: 13px; }
 .chips.pick button.on { background: rgba(232, 176, 75, .16); border-color: var(--accent, #e8b04b); color: var(--accent, #e8b04b); }
 .chips.pick small { color: var(--dim, #9a9187); }
-.chips.pick button::before { content: ""; display: inline-block; width: 11px; height: 11px; border: 1.5px solid var(--dim); border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
-.chips.pick button.on::before { content: "✓"; background: var(--accent); border-color: var(--accent); color: #1a1408; font-size: 10px; line-height: 11px; text-align: center; font-weight: 700; }
 .ns-sum { font-size: 13px; margin: -6px 0 12px; color: var(--dim); }
 .ns-sum b { color: var(--text); font-weight: 600; }
 .chips .rm { display: inline-flex; align-items: center; gap: 4px; }
@@ -560,6 +558,42 @@ details.fold > summary:focus-visible, details.adv > summary:focus-visible { outl
 @media (max-width: 560px) {
   header { position: fixed; top: 0; left: 0; right: 0; }
   body { padding-top: var(--hdr, 160px); }
-  header.tuck .tabs, header.tuck .filters, header.tuck .active-row { display: none; }
+  header.tuck .tabs, header.tuck .filters, header.tuck .active-row, header.tuck .subnav { display: none; }
   .filters input[type=search] { min-width: 200px; }
 }
+
+/* Don't learn from: chips spaced like everywhere else, help text clear of them */
+.chips.pick button { margin: 0 6px 6px 0; }
+.chips.pick + .help, .field .chips.pick ~ .help { margin-top: 4px; }
+
+/* Plex libraries: one row each, Use / Own only / Ignore on the right */
+.librows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; max-width: 520px; }
+.librow { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #1d1a17; border: 1px solid var(--line); border-radius: 8px; padding: 6px 6px 6px 12px; }
+.librow .libname { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.librow .libname small { color: var(--dim); font-size: 12px; margin-left: 4px; }
+.librow .seg { flex-shrink: 0; }
+.librow .seg button + button { border-left: 1px solid var(--line); }
+.librow .seg button.on { background: rgba(232, 176, 75, .16); color: var(--accent); }
+.field .librows + .help { margin-top: 0; }
+@media (max-width: 560px) {
+  .librow { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; }
+  .librow .seg { display: flex; }
+  .librow .seg button { flex: 1; padding: 7px 6px; }
+}
+/* Don't learn from: every genre in your library */
+.nsg-tog { margin: 2px 0 8px; }
+.nsg-all { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.nsg-none { font-size: 12px; margin: 2px 0 8px; }
+
+/* Up next: the switch row between its pages, in the header so it never moves; scrolls sideways on narrow screens */
+.subnav:not([hidden]) { display: flex; padding: 0 20px 10px; overflow-x: auto; scrollbar-width: none; }
+.subnav::-webkit-scrollbar { display: none; }
+.subnav .seg { flex: none; }
+.subnav .seg button { padding: 6px 14px; font-size: 13px; white-space: nowrap; }
+.subnav.fade-right { -webkit-mask-image: linear-gradient(to left, transparent, #000 44px); mask-image: linear-gradient(to left, transparent, #000 44px); }
+@media (max-width: 860px) { .subnav:not([hidden]) { padding: 0 12px 10px; } }
+/* wide screens: the top bar stays on one line (the sync status gives way first), with room for the Up next tab */
+@media (min-width: 1240px) { .bar { flex-wrap: nowrap; } .bar > :not(.status) { flex-shrink: 0; } .status { min-width: 0; } }
+@media (min-width: 1240px) and (max-width: 1400px) { .gsearch { width: 180px; } }
+/* phones: a list page's own buttons (All / Collections / Directors) go under its title instead of off the edge */
+@media (max-width: 560px) { .list-head { flex-wrap: wrap; align-items: flex-start; } }

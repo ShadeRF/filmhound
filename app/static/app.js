@@ -389,10 +389,10 @@ const searchHint = () => { $("gq").placeholder = PHONE.matches ? "Search" : "Sea
 PHONE.addEventListener("change", searchHint); searchHint();
 // The filter bar scrolls sideways on narrow screens: fade its right edge while more controls are off-screen.
 function filterFade() {
-  const f = $("filters");
-  f.classList.toggle("fade-right", f.scrollWidth - f.scrollLeft - f.clientWidth > 2);
+  for (const f of [$("filters"), $("subnav")]) f.classList.toggle("fade-right", f.scrollWidth - f.scrollLeft - f.clientWidth > 2);
 }
 $("filters").addEventListener("scroll", filterFade, { passive: true });
+$("subnav").addEventListener("scroll", filterFade, { passive: true });
 window.addEventListener("resize", filterFade);
 
 // any card anywhere opens the drawer; the cards around it become prev/next
@@ -1157,11 +1157,39 @@ function input(k, type = "text", ph = "") {
 }
 // What "Don't learn from" leaves out right now, in one line (same as Recordhound)
 function nsSummary() {
-  const out = [...(val("NOSEED_LIBRARIES") || []).map(l => `the ${l} library`), ...(val("NOSEED_GENRES") || [])];
+  const read = val("PLEX_LIBRARIES") || [];
+  const own = (val("NOSEED_LIBRARIES") || []).filter(l => !read.length || read.some(x => lc(x) === lc(l)));
+  const name = l => ((plexLibs || []).find(x => lc(x.title) === lc(l)) || { title: l }).title;   // as Plex spells it
+  const out = [...own.map(l => `the ${name(l)} library (own only)`), ...(val("NOSEED_GENRES") || [])];
   return out.length ? `<b>Left out:</b> ${out.map(esc).join(", ")}` : "Nothing is left out yet.";
 }
 // "Movies" or "TV" after a library's name, unless the name already says it ("Movies", "TV Shows")
 const libKind = x => { const k = x.type === "show" ? "TV" : "Movies"; return (x.title || "").toLowerCase().includes(k.toLowerCase().replace(/s$/, "")) ? "" : ` <small>${k}</small>`; };
+// Each Plex library is Use (read, shapes your picks), Own only (read and counts as owned, but doesn't shape your
+// picks) or Ignore (not read). Stored the way it always was, so older setups carry over: PLEX_LIBRARIES lists the
+// libraries that are read (empty = every library) and NOSEED_LIBRARIES the own-only ones (same as Recordhound).
+const lc = s => String(s || "").toLowerCase();
+const LIB_MODES = [["use", "Use"], ["own", "Own only"], ["ignore", "Ignore"]];
+const LIB_HELP = "<b>Use</b> shapes your picks. <b>Own only</b> counts as yours, so nothing in it is suggested to you, but it doesn't shape your picks: good for a kids' library or someone else's shows. <b>Ignore</b> isn't read at all.";
+function libMode(title, read, own) {
+  if (read.length && !read.some(x => lc(x) === lc(title))) return "ignore";
+  return own.some(x => lc(x) === lc(title)) ? "own" : "use";
+}
+// The two stored lists after one library changes mode; null when that would leave nothing to read.
+function libModeLists(libs, title, mode, read, own) {
+  const modes = Object.fromEntries(libs.map(l => [l.title, l.title === title ? mode : libMode(l.title, read, own)]));
+  const keep = libs.filter(l => modes[l.title] !== "ignore").map(l => l.title);
+  if (!keep.length) return null;
+  const known = new Set(libs.map(l => lc(l.title)));
+  return { PLEX_LIBRARIES: keep.length === libs.length ? [] : keep,
+    NOSEED_LIBRARIES: [...own.filter(x => !known.has(lc(x))), ...libs.filter(l => modes[l.title] === "own").map(l => l.title)] };
+}
+function libRows(libs, read, own, attr) {
+  return `<div class="librows">${libs.map(l => { const m = libMode(l.title, read, own); return `<div class="librow"><span class="libname">${esc(l.title)}${libKind(l)}</span>
+    <div class="seg" role="group" aria-label="${esc(l.title)}">${LIB_MODES.map(([k, label]) =>
+      `<button type="button" ${attr}="${esc(l.title)}" data-mode="${k}" class="${m === k ? "on" : ""}" aria-pressed="${m === k}">${label}</button>`).join("")}</div></div>`; }).join("")}</div>
+    <div class="help">${LIB_HELP}</div>`;
+}
 function svcCard(id) {
   const c = SVC[id], set = !!((!c.url || val(c.url)) && val(c.key));
   const body = `${c.url ? `<div class="field"><label>URL ${srcTag(c.url)}</label>${input(c.url, "text", "http://")}${c.urlHelp ? `<div class="help">${c.urlHelp}</div>` : ""}</div>` : ""}
@@ -1214,11 +1242,10 @@ function renderSettings() {
       ${rangeField("OWNED_WEIGHT", "Titles you own, unwatched", 0, 1, 0.05,
         "How much the things you've collected but not watched yet shape your taste. Keep it high if your library is curated; lower it if it's a bit of everything.", v => Math.round(v * 100) + "%")}
       <h4>Don't learn from</h4>
-      <p class="sub">Tick anything that shouldn't shape your picks. It stays in your library and still counts as owned.</p>
+      <p class="sub">Choose anything that shouldn't shape your picks. It stays in your library and still counts as owned.</p>
       <p class="ns-sum" id="nsSum">${nsSummary()}</p>
-      <div class="field"><label>Libraries to leave out</label><div id="noseedLibs" class="chips pick"><span class="muted">Sync once to list your libraries.</span></div></div>
-      <div class="field"><label>Genres to leave out</label><div><div class="chips pick">${NOSEED_GENRE_LIST.map(g =>
-        `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}</button>`).join("")}</div>
+      <div class="field top"><label>Genres to leave out</label><div><div class="chips pick" id="nsgQuick">${nsgQuick()}</div>
+        <div id="nsgMore"></div>
         <div class="help">Titles in any of these genres, in every library.</div></div></div>
       <div class="field"><label>Titles left out</label><div id="noseedTitles"><span class="muted">None yet. Open any title you own and tick <b>Don't learn from this</b>.</span></div></div>
     </div>`, "Ratings count most, then what you've watched, then what you own. These settings adjust the rest.")],
@@ -1307,22 +1334,34 @@ function renderSettings() {
   if (plexLibs) renderLibs();
 }
 const NOSEED_GENRE_LIST = ["Animation", "Family", "Kids", "Documentary", "Music", "Horror", "Romance", "Reality", "Talk", "News", "Soap", "TV Movie"];
+// Quick picks, plus any chosen genre that isn't one of them, so the folded view never hides a choice
+let nsgAll = null, nsgOpen = false;
+function nsgChip(g, count) {
+  return `<button type="button" data-nsg="${esc(g)}" class="${(val("NOSEED_GENRES") || []).includes(g) ? "on" : ""}">${esc(g)}${count != null ? ` <small>${count}</small>` : ""}</button>`;
+}
+function nsgQuick() {
+  const extra = (val("NOSEED_GENRES") || []).filter(g => !NOSEED_GENRE_LIST.includes(g));
+  return [...NOSEED_GENRE_LIST, ...extra].map(g => nsgChip(g)).join("");
+}
+function renderNsgMore() {
+  const el = $("nsgMore"); if (!el || !nsgAll) return;
+  if (!nsgAll.length) { el.innerHTML = `<p class="muted nsg-none">Sync once to list your genres.</p>`; return; }
+  el.innerHTML = nsgOpen
+    ? `<div class="chips pick nsg-all">${nsgAll.map(g => nsgChip(g.name, g.count)).join("")}</div><button type="button" class="link accent nsg-tog" data-nsg-more="0">Fewer genres</button>`
+    : `<button type="button" class="link accent nsg-tog" data-nsg-more="1">More genres…</button>`;
+}
 async function loadNoseed() {
   try {
-    const [secs, ns] = await Promise.all([api("/api/plex/sections"), api("/api/noseed")]);
-    const chosen = val("NOSEED_LIBRARIES") || [];
-    if (secs.sections.length) $("noseedLibs").innerHTML = secs.sections.map(x =>
-      `<button type="button" data-nsl="${esc(x.title)}" class="${chosen.includes(x.title) ? "on" : ""}">${esc(x.title)}${libKind(x)}</button>`).join("");
+    const [ns, gs] = await Promise.all([api("/api/noseed"), api("/api/noseed/genres")]);
+    nsgAll = gs.genres; renderNsgMore();
     if (ns.items.length) $("noseedTitles").innerHTML = `<div class="chips">${ns.items.map(x =>
       `<span class="rm">${esc(x.title || "Untitled")}<button type="button" data-unseed="${x.key}" title="Learn from it again">×</button></span>`).join("")}</div>`;
   } catch {}
 }
 function renderLibs() {
-  const chosen = val("PLEX_LIBRARIES") || [];
-  const all = chosen.length === 0;
-  $("plexLibs").innerHTML = `<div class="libs">${plexLibs.map(l => `<label><input type="checkbox" data-lib="${esc(l.title)}" ${all || chosen.includes(l.title) ? "checked" : ""}>
-    ${esc(l.title)} <small>${l.type === "show" ? "TV" : "Movies"}</small></label>`).join("")}</div>
-    <div class="help" style="margin-left:184px;color:var(--dim);font-size:12px">Libraries Filmhound reads. Uncheck any you want ignored (e.g. kids or 4K duplicates).</div>`;
+  if (!$("plexLibs") || !plexLibs) return;
+  if ($("nsSum")) $("nsSum").innerHTML = nsSummary();
+  $("plexLibs").innerHTML = plexLibs.length ? `<div class="field top"><label>Libraries</label><div>${libRows(plexLibs, val("PLEX_LIBRARIES") || [], val("NOSEED_LIBRARIES") || [], "data-lib")}</div></div>` : "";
 }
 $("settingsBody").addEventListener("input", e => {
   const el = e.target, k = el.dataset.k;
@@ -1333,21 +1372,24 @@ $("settingsBody").addEventListener("input", e => {
     if (svc) { $("tres-" + svc).textContent = ""; }
     setDirty(true);
   }
-  if (el.dataset.lib !== undefined) {
-    const boxes = [...$("plexLibs").querySelectorAll("[data-lib]")];
-    const on = boxes.filter(b => b.checked).map(b => b.dataset.lib);
-    draft.PLEX_LIBRARIES = on.length === boxes.length ? [] : on;
-    setDirty(true);
-  }
 });
 $("settingsBody").addEventListener("click", async e => {
   const t = e.target.closest("[data-test]");
   if (t) { testSvc(t.dataset.test); return; }
-  const ng = e.target.closest("[data-nsg],[data-nsl]");
+  const lm = e.target.closest("[data-lib][data-mode]");
+  if (lm) {
+    const lists = libModeLists(plexLibs, lm.dataset.lib, lm.dataset.mode, val("PLEX_LIBRARIES") || [], val("NOSEED_LIBRARIES") || []);
+    if (!lists) { toast("Filmhound needs at least one library to read."); return; }
+    Object.assign(draft, lists); setDirty(true); renderLibs(); $("nsSum").innerHTML = nsSummary(); return;
+  }
+  const more = e.target.closest("[data-nsg-more]");
+  if (more) { nsgOpen = more.dataset.nsgMore === "1"; renderNsgMore(); if (!nsgOpen) $("nsgQuick").innerHTML = nsgQuick(); return; }
+  const ng = e.target.closest("[data-nsg]");
   if (ng) {
-    const k = ng.dataset.nsg ? "NOSEED_GENRES" : "NOSEED_LIBRARIES", v = ng.dataset.nsg || ng.dataset.nsl;
-    const cur = new Set(val(k) || []); cur.has(v) ? cur.delete(v) : cur.add(v);
-    draft[k] = [...cur]; ng.classList.toggle("on", cur.has(v)); setDirty(true); $("nsSum").innerHTML = nsSummary(); return;
+    const v = ng.dataset.nsg, cur = new Set(val("NOSEED_GENRES") || []); cur.has(v) ? cur.delete(v) : cur.add(v);
+    draft.NOSEED_GENRES = [...cur]; setDirty(true); $("nsSum").innerHTML = nsSummary();
+    document.querySelectorAll("#settingsBody [data-nsg]").forEach(b => { if (b.dataset.nsg === v) b.classList.toggle("on", cur.has(v)); });
+    return;
   }
   const un = e.target.closest("[data-unseed]");
   if (un) {
@@ -1398,7 +1440,7 @@ $("saveBtn").onclick = async () => {
     Object.keys(arrOpts).forEach(k => delete arrOpts[k]);
     lastStatus.my_provider_ids = S.values.MY_PROVIDERS; lastStatus.my_providers = S.values.MY_PROVIDERS.length;
     lastStatus.seerr_url = S.values.SEERR_URL; lastStatus.radarr_url = S.values.RADARR_URL; lastStatus.sonarr_url = S.values.SONARR_URL;
-    const needSync = r.changed.some(k => /PLEX|TMDB|SEERR|RADARR|SONARR|VOTES|POOL|MAX_RECS|OWNED|IMDB|REGION|LETTERBOXD|TRAKT/.test(k));
+    const needSync = r.changed.some(k => /PLEX|TMDB|SEERR|RADARR|SONARR|VOTES|POOL|MAX_RECS|OWNED|NOSEED|IMDB|REGION|LETTERBOXD|TRAKT/.test(k));
     if (!wasConfigured && r.configured) {
       await api("/api/sync", { method: "POST" }); wasRunning = true; poll();
       toast("Saved · building your recommendations now");
@@ -1497,12 +1539,20 @@ $("settingsBody").addEventListener("click", async e => {
 // ---- navigation
 const VIEWS = ["home", "setup", "picks", "library", "watchlist", "rate", "history", "settings", "person", "search", "like", "gaps", "upcoming"];
 const LIST_VIEWS = ["watchlist", "search", "like", "gaps", "upcoming"];
+// The Up next tab holds the pages of things you don't have yet, with a switch row between them (like Recordhound's Missing).
+// #/next opens the first one.
+const UP_NEXT = [["gaps", "Collections"], ["upcoming", "Coming soon"]];
+const upNextSwitch = on => `<div class="seg" role="tablist" aria-label="Up next">${UP_NEXT.map(([v, l]) =>
+  `<button role="tab" data-go="${v}" aria-selected="${v === on}" class="${v === on ? "on" : ""}">${l}</button>`).join("")}</div>`;
+$("subnav").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b && !b.classList.contains("on")) go(b.dataset.go); });
 function showView(v, keepFilters) {
   view = v;
   document.querySelectorAll(".view").forEach(x => x.classList.remove("on"));
   const sec = LIST_VIEWS.includes(v) ? "v-list" : { home: "v-home", picks: "v-grid", library: "v-grid", rate: "v-rate", history: "v-history", settings: "v-settings", setup: "v-setup", person: "v-person" }[v];
   $(sec).classList.add("on");
-  document.querySelectorAll("#nav button, #gear").forEach(b => b.classList.toggle("on", b.dataset.view === v));
+  const upNext = UP_NEXT.some(([x]) => x === v);   // the switch stays put; only the page under it changes
+  document.querySelectorAll("#nav button, #gear").forEach(b => b.classList.toggle("on", b.dataset.view === v || (upNext && b.dataset.view === "next")));
+  $("subnav").hidden = !upNext; if (upNext) { $("subnav").innerHTML = upNextSwitch(v); requestAnimationFrame(filterFade); }
   const gridView = v === "picks" || v === "library";
   $("filters").style.display = $("activeRow").style.display = gridView ? "" : "none";
   if (gridView) requestAnimationFrame(filterFade);
@@ -1537,6 +1587,7 @@ function route() {
   if (v === "search") { showView("search"); runSearch(safeDecode(arg || "")); return; }
   if (v === "like" && arg) { showView("like"); loadLike(arg, +(location.hash.split("/")[3])); return; }
   if (v === "person" || v === "like") { go("home"); return; }   // an address with the id missing
+  if (v === "next") { history.replaceState(null, "", "#/" + UP_NEXT[0][0]); route(); return; }
   if (VIEWS.includes(v) && !(v === view && document.querySelector(".view.on") && v !== "picks" && v !== "library")) showView(v);
   else if (!VIEWS.includes(v)) showView("home");
 }
@@ -1562,8 +1613,6 @@ const APP_SETUP = {
     plex: "Filmhound reads your movie and TV libraries, what you've watched and your star ratings. Nothing in Plex changes unless you ask.",
     tmdb: "TMDB supplies recommendations, posters, cast and crew. The key is free: create an account at <a href=\"https://www.themoviedb.org/settings/api\" target=\"_blank\" rel=\"noopener\">themoviedb.org</a>, then Settings → API → create a key (any app name).",
   },
-  libType: t => t === "show" ? "TV" : "Movies",
-  libHelp: "Untick any library you want ignored, like a kids' library or 4K duplicates. You can change this later in Settings.",
   extras: [
     { title: "Bring in your Letterboxd history", why: "Everything you've watched and rated there trains your picks and stops it showing up as a suggestion. Upload your export once.", card: "letterboxd", done: () => !!lastStatus.letterboxd_export },
     { title: "Or connect Trakt", why: "Movies and shows you've watched and rated on Trakt.", card: "trakt", done: () => !!lastStatus.trakt },
@@ -1632,9 +1681,8 @@ function renderSetup() {
         ${wzField(c.key, c.keyLabel, c.keyHelp)}
         <div class="testrow"><button class="btn" data-wz="test">Test connection</button>
           <span class="tres ${tested ? "ok" : wz.msg[id] ? "bad" : ""}">${wz.msg[id] ? (tested ? "✓ " : "✕ ") + esc(wz.msg[id]) : ""}</span></div>
-        ${id === "plex" && wz.libs ? `<div class="field"><label>Libraries</label><div><div class="libs wz-libs">${wz.libs.map(l =>
-          `<label><input type="checkbox" data-wz-lib="${esc(l.title)}" ${!(wz.vals.PLEX_LIBRARIES && wz.vals.PLEX_LIBRARIES.length) || wz.vals.PLEX_LIBRARIES.includes(l.title) ? "checked" : ""}> ${esc(l.title)}${l.type && APP_SETUP.libType ? ` <small>${APP_SETUP.libType(l.type)}</small>` : ""}</label>`).join("")}</div>
-          <div class="help">${APP_SETUP.libHelp}</div></div></div>` : ""}
+        ${id === "plex" && wz.libs && wz.libs.length ? `<div class="field top wz-libs"><label>Libraries</label><div>${libRows(wz.libs, wz.vals.PLEX_LIBRARIES || [], wz.vals.NOSEED_LIBRARIES || [], "data-wz-lib")}
+          <div class="help">You can change this later in Settings.</div></div></div>` : ""}
       </div>
       <div class="wz-actions"><button class="btn" data-wz="back">Back</button>
         <button class="btn primary" data-wz="next" ${tested && !wz.busy ? "" : "disabled"}>${wz.busy ? "Saving…" : "Continue"}</button></div>
@@ -1687,6 +1735,7 @@ async function wzNext() {
     const body = {};
     APP_SETUP.required.forEach(r => { const c = SVC[r]; if (c.url) body[c.url] = wzVal(c.url); body[c.key] = wzVal(c.key); });
     if (wz.vals.PLEX_LIBRARIES) body.PLEX_LIBRARIES = wz.vals.PLEX_LIBRARIES;
+    if (wz.vals.NOSEED_LIBRARIES) body.NOSEED_LIBRARIES = wz.vals.NOSEED_LIBRARIES;
     wz.busy = true; renderSetup();
     try {
       S = await api("/api/settings", { method: "PUT", body: JSON.stringify(body) });
@@ -1700,13 +1749,15 @@ async function wzNext() {
 $("setupBody").addEventListener("input", e => {
   const k = e.target.dataset.wzK;
   if (k) { wz.vals[k] = e.target.value; const id = wzSteps()[wz.step]; if (wz.ok[id]) { wz.ok[id] = false; wz.msg[id] = ""; renderSetup(); const el = document.querySelector(`[data-wz-k="${k}"]`); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }
-  if (e.target.dataset.wzLib !== undefined) {
-    const boxes = [...document.querySelectorAll("[data-wz-lib]")], on = boxes.filter(b => b.checked).map(b => b.dataset.wzLib);
-    wz.vals.PLEX_LIBRARIES = on.length === boxes.length ? [] : on;
-  }
 });
 $("setupBody").addEventListener("click", async e => {
   const a = e.target.closest("[data-wz]"), card = e.target.closest("[data-wz-card]"), gv = e.target.closest("[data-wz-go]");
+  const lm = e.target.closest("[data-wz-lib][data-mode]");
+  if (lm) {
+    const lists = libModeLists(wz.libs, lm.dataset.wzLib, lm.dataset.mode, wz.vals.PLEX_LIBRARIES || [], wz.vals.NOSEED_LIBRARIES || []);
+    if (!lists) { toast("Filmhound needs at least one library to read."); return; }
+    Object.assign(wz.vals, lists); renderSetup(); return;
+  }
   if (card) { openSetting(card.dataset.wzCard); return; }
   if (gv) { go(gv.dataset.wzGo); return; }
   if (!a) return;

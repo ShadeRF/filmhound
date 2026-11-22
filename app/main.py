@@ -924,6 +924,12 @@ def noseed_get():
     return {"items": [{"key": k, "title": v["title"], "media": "tv" if k < 0 else "movie", "at": v["at"]} for k, v in db.noseed().items()]}
 
 
+@app.get("/api/noseed/genres")
+def noseed_genres():
+    """Every genre on the titles you own, with how many titles carry it. Read from stored TMDB details only."""
+    return {"genres": db.owned_genres()}
+
+
 @app.get("/api/plex/sections")
 def plex_sections():
     return {"sections": [{"key": k, **v} for k, v in db.get_meta("plex_sections", {}).items() if v.get("type") in ("movie", "show")]}

@@ -578,3 +578,78 @@ def test_library_says_how_many_there_are_before_filters():
     assert everything["all"] == everything["total"]
     narrowed = c.get("/api/library?media=movie&q=zzzz-no-such-title").json()
     assert narrowed["total"] == 0 and narrowed["all"] == everything["all"]
+
+
+def test_genre_list_counts_every_genre_you_own_without_asking_tmdb():
+    """Don't learn from › More genres: every TMDB genre on titles you own, movies and shows together, most common first."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    db.init()
+    s = Syncer(lambda: FakePlex(), lambda: FakeTMDB(), lambda: FakeSeerr(), lambda: iter([]))
+    s.run(full=True)
+    c = TestClient(m.app)
+    calls = FakeTMDB.calls
+    got = c.get("/api/noseed/genres").json()["genres"]
+    owned_noir = len(OWNED + UNWATCHED) - 2 + len(SHOWS)   # 101 and 102 are the rom-coms
+    assert got == [{"name": "Crime", "count": owned_noir}, {"name": "Comedy", "count": 2}], got
+    assert FakeTMDB.calls == calls, "listing genres asked TMDB"
+    # before the first sync there is nothing to list
+    db.replace_library([])
+    try:
+        assert c.get("/api/noseed/genres").json() == {"genres": []}
+    finally:
+        s.run(full=True)
+
+
+def test_library_modes_are_stored_as_before():
+    """Plex card: Use / Own only / Ignore are stored in PLEX_LIBRARIES and NOSEED_LIBRARIES, so older setups carry over."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    from app.clients import Plex
+    db.init()
+    c = TestClient(m.app)
+    keep = {k: getattr(config, k) for k in ("PLEX_LIBRARIES", "NOSEED_LIBRARIES", "SYNC_HOUR")}
+    try:
+        # Movies: Use, Kids: Own only, 4K: Ignore
+        r = c.put("/api/settings", json={"PLEX_LIBRARIES": ["Movies", "Kids"], "NOSEED_LIBRARIES": ["Kids"]}).json()
+        assert {"PLEX_LIBRARIES", "NOSEED_LIBRARIES"} <= set(r["changed"])
+        assert r["values"]["PLEX_LIBRARIES"] == ["Movies", "Kids"] and r["values"]["NOSEED_LIBRARIES"] == ["Kids"]
+        # saving anything else leaves them exactly as they were (no migration)
+        c.put("/api/settings", json={"SYNC_HOUR": 3})
+        assert config.PLEX_LIBRARIES == ["Movies", "Kids"] and config.NOSEED_LIBRARIES == ["Kids"]
+        # Ignore: the library isn't read at all
+        p = Plex("http://plex.test", "t", config.PLEX_LIBRARIES)
+        p._get = lambda path, **k: {"Directory": [{"key": "1", "title": "Movies", "type": "movie"},
+                                                  {"key": "3", "title": "kids", "type": "movie"},
+                                                  {"key": "4", "title": "4K", "type": "movie"}]}
+        assert [d["title"] for d in p.sections("movie")] == ["Movies", "kids"]
+        # every library on Use again: an empty list means all of them
+        c.put("/api/settings", json={"PLEX_LIBRARIES": [], "NOSEED_LIBRARIES": []})
+        assert Plex("http://plex.test", "t", config.PLEX_LIBRARIES).libraries == []
+    finally:
+        config.save(keep)
+
+
+def test_own_only_library_counts_as_owned_but_does_not_shape_picks(monkeypatch):
+    db.init()
+    s = Syncer(lambda: FakePlex(), lambda: FakeTMDB(), lambda: FakeSeerr(), lambda: iter([]))
+    s.run(full=True)
+    sections = db.get_meta("plex_sections", {})
+    got = {}
+    real = engine.build_seeds
+
+    def spy(library, feedback, **kw):
+        got["keys"] = {r["tmdb_id"] for r in library}
+        return real(library, feedback, **kw)
+    monkeypatch.setattr(engine, "build_seeds", spy)
+    db.set_meta("plex_sections", {"1": {"title": "Kids", "type": "movie"}})   # the unwatched titles live in section 1
+    monkeypatch.setattr(config, "NOSEED_LIBRARIES", ["kids"])
+    try:
+        s.compute("movie")
+        assert not got["keys"] & set(UNWATCHED), "an own-only library shaped the picks"
+        assert set(OWNED) <= got["keys"]
+        assert not {r["key"] for r in db.recs("movie")} & set(UNWATCHED), "an own-only title was suggested"
+    finally:
+        db.set_meta("plex_sections", sections)
+        monkeypatch.setattr(config, "NOSEED_LIBRARIES", [])
+        s.compute("movie")

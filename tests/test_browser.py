@@ -673,3 +673,13 @@ def test_a_collection_with_nothing_left_disappears_after_not_interested(page):
     assert page.locator("#g1").count() == 0 and page.locator("#g2").count() == 1   # the emptied collection is gone, the other stays
     page.evaluate("() => { document.querySelectorAll('#g2 .card').forEach(c => c.remove()); pruneEmptyGroups(); }")
     assert "Your collections are complete" in page.locator("#listBody").inner_text()
+
+
+def test_row_arrows_scroll_on_every_page(page):
+    go(page, "home")
+    row = page.locator("#homeRows .hwrap").first
+    row.hover()
+    row.locator(".scroll-btn.r").click()
+    page.wait_for_function("document.querySelector('#homeRows .hscroll').scrollLeft > 0")
+    go(page, "gaps")   # Finish what you started builds its rows with the same arrows
+    assert page.evaluate("loadGaps.toString().includes('scroll-btn r')")

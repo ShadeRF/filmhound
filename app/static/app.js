@@ -764,8 +764,7 @@ async function loadHome() {
     </div>`).join("");
 }
 $("homeRows").addEventListener("click", e => {
-  const b = e.target.closest(".scroll-btn");
-  if (b) { const sc = b.parentElement.querySelector(".hscroll"); sc.scrollBy({ left: (b.classList.contains("l") ? -1 : 1) * sc.clientWidth * 0.85, behavior: "smooth" }); return; }
+  if (e.target.closest(".scroll-btn")) return;   // handled for every page below
   const a = e.target.closest("[data-see]");
   if (a) { e.preventDefault(); const s = JSON.parse(a.dataset.see); if (s.view) go(s.view); else if (s.tab === "library") go("library"); else drill(s, media); }
 });
@@ -1040,7 +1039,7 @@ async function loadGaps() {
         <div><h3>${g.type !== "collection" ? `<a href="#/person/${g.id}">${esc(g.name)}</a>` : esc(g.name)}</h3>
         <div class="muted">${g.type === "director" ? "Director · " : g.type === "actor" ? "Actor · " : ""}You have ${g.owned} of ${g.total}${g.type === "actor" ? " leading roles" : ""}${g.requested ? ` · ${g.requested} already requested` : ""}${g.hidden ? ` · ${g.hidden} not interested` : ""}</div>
         <div class="meter"><i style="width:${Math.round(g.owned / g.total * 100)}%"></i></div></div></div>
-      <div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div></div>`).join(""), tools);
+      <div class="hwrap"><button class="scroll-btn l" aria-label="Scroll left">${ICON.left}</button><div class="hscroll" data-list>${g.items.map(r => card(r, { why: false, badge: r.upcoming ? `<span class="match taste">${esc(fmtDate(r.date))}</span>` : "" })).join("")}</div><button class="scroll-btn r" aria-label="Scroll right">${ICON.right}</button></div></div>`).join(""), tools);
 }
 async function loadUpcoming() {
   listShell("Coming soon", "", `<div class="grid">${skeleton(10)}</div>`);
@@ -1840,3 +1839,8 @@ $("sync").onclick = async () => { try { await api("/api/sync", { method: "POST" 
   poll();
   if (lastStatus.import?.running) watchImport();
 })();
+// row arrows, on every page that has scrolling rows
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest(".scroll-btn"); if (!b) return;
+  const sc = b.parentElement.querySelector(".hscroll"); sc.scrollBy({ left: (b.classList.contains("l") ? -1 : 1) * sc.clientWidth * 0.85, behavior: "smooth" });
+});

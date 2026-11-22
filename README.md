@@ -13,6 +13,31 @@ Nothing is ever requested automatically.
 
 Sibling app for music: [Recordhound](https://github.com/ShadeRF/recordhound).
 
+<p align="center"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-for-you.jpg" alt="For You: top picks with the titles that led to each, then rows like Because you watched Parasite"></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-details.jpg" alt="A title page: ratings, why it was picked, what it shares with your taste, and where to watch"><br><sub>Every title: why it was picked, what it shares with your taste, and one click to add it to Radarr or Sonarr.</sub></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-all-picks.jpg" alt="All Picks: every pick with filters"><br><sub>All Picks: everything, with filters for genre, decade, rating, runtime, language and your services.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-rate.jpg" alt="The Rate page: rate what you've watched, one title at a time"><br><sub>Rate what you've watched; ratings on titles in Plex are saved to Plex.</sub></td>
+    <td width="50%" align="center"><img src="https://raw.githubusercontent.com/ShadeRF/unraid-templates/main/screenshots/filmhound-phone.jpg" width="45%" alt="For You on a phone"><br><sub>Works on your phone.</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots show a demo library.</sub>
+
+## Why Filmhound?
+
+I tried a lot of recommendation apps, and none of them gave me suggestions that truly matched what was in my library or what I'd been watching. They leaned on what's popular, what a service wants to promote, or what everyone else is watching.
+
+So I built my own. Filmhound starts from your Plex library and watch history and works outward from there:
+
+- **Your library comes first.** What you own, watch and rate, in Plex and on Letterboxd or Trakt, shapes your taste. Ratings count most.
+- **Every pick explains itself:** the titles that led to it, and what it shares with your taste.
+- **You can tune it.** In Settings you choose how much titles you own but haven't watched count, how obscure picks can be and how many candidates get scored. You can also stop whole libraries, genres or single titles from shaping your picks.
+
 ## Install
 
 **Unraid:** search for **Filmhound** in Community Apps. Setup is covered in [the Unraid guide](https://github.com/ShadeRF/unraid-templates/blob/main/docs/filmhound.md).
@@ -102,6 +127,10 @@ Turn on sign-in in Settings before reaching it from outside your home.
 - Too many obscure picks? Raise *Minimum TMDB votes*. Too mainstream? Lower it and sort by *Deep cuts*.
 - Every setting can also come from an environment variable with the same name (`PLEX_URL`, `TMDB_API_KEY`…). Anything saved on the Settings page wins.
 - Delete `filmhound.db` and `settings.json` in your data folder to start fresh.
+
+## About the name
+
+Filmhound and Recordhound are named for Daisy, my beagle and the hound of my life. She's gone now, but she always had a nose for good things, and I like to think these apps carry a little of that.
 
 ## Source and license
 

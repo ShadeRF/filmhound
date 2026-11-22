@@ -278,6 +278,8 @@ def test_phone_layout(browser, site):
             assert p.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"{where} scrolls sideways on a phone"
             box = p.locator("#gsearch").bounding_box()
             assert box and box["width"] > 60 and box["x"] + box["width"] <= 390, "search should fit in the phone header"
+            gear = p.locator("#gear").bounding_box()
+            assert abs(gear["y"] - box["y"]) < 12 and gear["x"] + gear["width"] <= 390, "the header should stay on one line on a phone"
         assert not errors, errors
     finally:
         ctx.close()
